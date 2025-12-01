@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 7.0</title>
+    <title>Sales Master Pro 7.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -290,9 +290,9 @@
         };
 
         window.onload = function() {
+            // FIX: checkSession is now called ONLY after CSV is fully loaded
             loadCSV();
             initDraggable();
-            checkSession(); // Check if user already logged in (Refresh Fix)
         };
 
         // --- Session Persistence (Fix Refresh) ---
@@ -330,6 +330,8 @@
                         phone: (item.Phone || item.phone || "").trim(),
                         credit: (item.Credit || item.credit || "0").trim()
                     }));
+                    // ★★★ CRITICAL FIX: Only check session AFTER data is loaded
+                    checkSession();
                 }
             });
         }
@@ -358,7 +360,16 @@
             // 2. Sales Login
             if (pass !== '0000') { status.innerText = "Wrong Password"; status.classList.remove('hidden'); return; }
             const customers = allSalesData.filter(c => c.repCode == code);
-            if (customers.length === 0) { status.innerText = "Code not found"; status.classList.remove('hidden'); return; }
+            
+            // Fix: If CSV isn't ready yet, customers might be empty even if code is valid.
+            // But since we moved checkSession to inside loadCSV, this should be safe now.
+            if (customers.length === 0) { 
+                // Only show error if it's a manual login attempt (not auto)
+                if(document.activeElement.id === 'loginRepCode' || document.activeElement.id === 'loginPassword') {
+                    status.innerText = "Code not found"; status.classList.remove('hidden'); 
+                }
+                return; 
+            }
 
             myCustomers = customers;
             let finalName = repDirectory[code] || customers[0].csvRepName;
@@ -411,7 +422,6 @@
             const div = document.createElement('div');
             div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative";
             
-            // Build Rep Options
             let repOptions = '<option value="">Select Rep...</option>';
             for (const [code, name] of Object.entries(repDirectory)) repOptions += `<option value="${code}">${name} (${code})</option>`;
 
