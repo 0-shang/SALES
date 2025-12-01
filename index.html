@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Cloud 5.0</title>
+    <title>Sales Master Pro 6.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
-    <!-- 引入 Firebase SDK (使用兼容版，方便直接在浏览器运行) -->
+    <!-- Firebase SDK (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
@@ -25,20 +25,13 @@
             appId: "1:378026746438:web:95418962e1f6b941f36047",
             measurementId: "G-HNZQLVW09P"
         };
-        // ----------------------------------------------------
-
-        // 初始化 Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        // 初始化数据库连接
+        
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
         tailwind.config = {
             theme: {
-                extend: {
-                    colors: { primary: '#1e3a8a', secondary: '#3b82f6', accent: '#f59e0b', danger: '#ef4444' }
-                }
+                extend: { colors: { primary: '#1e3a8a', secondary: '#3b82f6', accent: '#f59e0b', danger: '#ef4444', success: '#10b981' } }
             }
         }
     </script>
@@ -52,45 +45,126 @@
         ::-webkit-scrollbar-thumb { background: #bbb; border-radius: 3px; }
         #draggableBtn { touch-action: none; cursor: grab; }
         #draggableBtn:active { cursor: grabbing; }
-        /* 加载动画 */
         .spinner { border: 4px solid rgba(0,0,0,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #1e3a8a; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* 任务完成动画 */
+        .task-fade-out { animation: fadeOut 0.5s forwards; }
+        @keyframes fadeOut { to { opacity: 0; transform: translateX(20px); height: 0; padding: 0; margin: 0; } }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans h-screen overflow-hidden flex flex-col">
 
-    <!-- Loading Mask -->
-    <div id="globalLoader" class="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center hidden">
+    <!-- Global Loader -->
+    <div id="globalLoader" class="fixed inset-0 z-[70] bg-white flex flex-col items-center justify-center hidden">
         <div class="spinner mb-4"></div>
-        <p class="text-gray-500">Syncing with Cloud...</p>
+        <p class="text-gray-500">Syncing Data...</p>
     </div>
 
     <!-- A. 登录界面 -->
     <div id="loginSection" class="fixed inset-0 z-50 bg-primary flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="bg-gray-50 p-8 text-center border-b border-gray-100">
-                <i class="fa-solid fa-cloud text-4xl text-primary mb-4"></i>
-                <h2 class="text-2xl font-bold text-gray-800">Cloud Login</h2>
+                <i class="fa-solid fa-user-shield text-4xl text-primary mb-4"></i>
+                <h2 class="text-2xl font-bold text-gray-800">System Login</h2>
             </div>
             <div class="p-8 space-y-6">
                 <div id="loginStatus" class="hidden text-sm text-center p-2 rounded bg-red-50 text-red-600"></div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Rep Code</label>
-                    <input type="text" id="loginRepCode" placeholder="Enter Code (e.g. 10543)" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ID / Code</label>
+                    <input type="text" id="loginRepCode" placeholder="Rep Code or 'admin'" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
                     <input type="password" id="loginPassword" placeholder="••••" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none">
                 </div>
                 <button onclick="handleLogin()" class="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-blue-900 transition">LOGIN</button>
-                <p class="text-center text-xs text-gray-400 mt-4">Data syncs across all devices</p>
             </div>
         </div>
     </div>
 
-    <!-- B. 主界面 -->
+    <!-- B. 管理员界面 (Admin Dashboard) -->
+    <div id="adminSection" class="flex flex-col h-full hidden">
+        <header class="bg-gray-800 text-white shadow-md z-20">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-accent text-white w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xl">AD</div>
+                    <h1 class="text-lg font-bold">ADMIN PANEL</h1>
+                </div>
+                <button onclick="logout()" class="text-red-300 hover:text-white"><i class="fa-solid fa-power-off"></i> Logout</button>
+            </div>
+            <!-- Admin Tabs -->
+            <div class="flex bg-gray-700 text-sm overflow-x-auto">
+                <button onclick="switchAdminTab('assign')" id="btnTabAssign" class="flex-1 py-3 hover:bg-gray-600 text-accent font-bold border-b-2 border-accent">Assign Task</button>
+                <button onclick="switchAdminTab('history')" id="btnTabHistory" class="flex-1 py-3 hover:bg-gray-600 text-gray-300">Task History</button>
+                <button onclick="switchAdminTab('reports')" id="btnTabReports" class="flex-1 py-3 hover:bg-gray-600 text-gray-300">All Reports</button>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-4 bg-gray-100">
+            <!-- 1. Assign Task Tab -->
+            <div id="adminTabAssign" class="max-w-3xl mx-auto space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="font-bold text-gray-700 mb-4 text-lg border-b pb-2">Create New Task</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500">SELECT SALES REP</label>
+                            <select id="adminAssignRep" class="w-full p-2 border rounded mt-1 bg-gray-50"></select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500">SELECT CUSTOMER</label>
+                            <div class="relative">
+                                <input type="text" id="adminAssignCustSearch" placeholder="Search customer..." class="w-full p-2 border rounded mt-1" onkeyup="searchAdminCust(this)">
+                                <div id="adminCustResults" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div>
+                                <input type="hidden" id="adminAssignCustId">
+                                <input type="hidden" id="adminAssignCustName">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="text-xs font-bold text-gray-500">TASK DETAIL / INSTRUCTION</label>
+                        <textarea id="adminAssignNote" class="w-full p-3 border rounded mt-1 h-20" placeholder="e.g. Visit to collect check..."></textarea>
+                    </div>
+                    <button onclick="adminSubmitTask()" class="bg-primary text-white px-6 py-2 rounded shadow hover:bg-blue-800 font-bold w-full md:w-auto">
+                        <i class="fa-solid fa-paper-plane mr-2"></i> Assign Task
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. History Task Tab -->
+            <div id="adminTabHistory" class="max-w-5xl mx-auto hidden space-y-4">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-2">
+                    <input type="text" id="adminTaskFilter" placeholder="Filter by Rep, Date or Customer..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminTasks()">
+                    <div class="text-xs text-gray-500"><i class="fa-solid fa-circle-info"></i> Click 'Undo' to restore accidental completions.</div>
+                </div>
+                <div id="adminTaskList" class="space-y-3"></div>
+            </div>
+
+            <!-- 3. All Reports Tab (Data Modify) -->
+            <div id="adminTabReports" class="max-w-6xl mx-auto hidden space-y-4">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-2 mb-4">
+                    <input type="text" id="adminReportFilter" placeholder="Filter reports..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminReports()">
+                    <button onclick="adminExportReports()" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow"><i class="fa-solid fa-file-csv mr-2"></i> Export Monthly Data</button>
+                </div>
+                <div class="bg-white rounded shadow overflow-hidden">
+                    <table class="min-w-full text-sm text-left">
+                        <thead class="bg-gray-200 text-gray-700 uppercase font-bold text-xs">
+                            <tr>
+                                <th class="p-3">Date</th>
+                                <th class="p-3">Rep</th>
+                                <th class="p-3">Customer</th>
+                                <th class="p-3">Note (Outcome)</th>
+                                <th class="p-3 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminReportTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- C. 销售界面 (Sales Dashboard) -->
     <div id="appSection" class="flex flex-col h-full hidden">
-        <!-- 顶部栏 -->
         <header class="bg-white border-b border-gray-200 shadow-sm z-20">
             <div class="container mx-auto px-4 py-3 flex justify-between items-center">
                 <div class="flex items-center space-x-3">
@@ -100,23 +174,14 @@
                         <p class="text-sm text-green-600 font-bold" id="welcomeUserText">...</p>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <button onclick="toggleWeeklyReport()" class="text-gray-500 hover:text-accent transition flex flex-col items-center">
-                        <i class="fa-solid fa-chart-line text-lg"></i>
-                        <span class="text-[10px]">Insights</span>
-                    </button>
-                    <button onclick="logout()" class="text-red-400 hover:text-red-600 ml-2">
-                        <i class="fa-solid fa-power-off text-lg"></i>
-                    </button>
-                </div>
+                <button onclick="logout()" class="text-red-400 hover:text-red-600 ml-2"><i class="fa-solid fa-power-off text-lg"></i></button>
             </div>
         </header>
 
-        <!-- 内容区域 -->
         <div class="flex flex-1 overflow-hidden relative">
             <main class="flex-1 overflow-y-auto p-4 md:p-8 relative bg-gray-50">
-                <!-- 1. 首页大搜索 -->
-                <div class="max-w-4xl mx-auto mt-6">
+                <!-- 1. Search -->
+                <div class="max-w-4xl mx-auto mt-2">
                     <div class="relative max-w-2xl mx-auto">
                         <input type="text" id="mainSearchInput" placeholder="Search Customer Name or Code..." 
                             class="w-full pl-6 pr-14 py-4 rounded-full shadow-lg border-none focus:ring-2 focus:ring-accent outline-none text-lg"
@@ -126,18 +191,28 @@
                     <div id="mainSearchResult" class="mt-6 hidden max-w-2xl mx-auto"></div>
                 </div>
 
-                <!-- 2. 今日任务列表 -->
-                <div class="max-w-5xl mx-auto mt-12 pb-24">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-xl font-bold text-gray-800 border-l-4 border-accent pl-3">Today's Task</h3>
-                        <button onclick="shareTaskToGroup()" class="text-sm bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow flex items-center">
-                            <i class="fa-brands fa-whatsapp mr-2"></i> Share Plan
+                <!-- 2. Accept Task Area (New) -->
+                <div id="acceptTaskSection" class="max-w-5xl mx-auto mt-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-primary pl-3 mb-4">
+                        <i class="fa-solid fa-inbox text-primary mr-2"></i> Assigned Tasks (Pending)
+                    </h3>
+                    <div id="acceptTaskList" class="space-y-3">
+                        <!-- Tasks from Admin -->
+                    </div>
+                </div>
+
+                <!-- 3. Today's Task -->
+                <div class="max-w-5xl mx-auto mt-8 pb-24">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-accent pl-3">Today's Task</h3>
+                        <button onclick="shareTaskToGroup()" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold shadow flex items-center">
+                            <i class="fa-brands fa-whatsapp mr-1"></i> Share Plan
                         </button>
                     </div>
                     <div id="todayTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
                 </div>
 
-                <!-- 填写日报按钮 -->
+                <!-- Write Report Btn -->
                 <div class="fixed bottom-8 right-8 z-10">
                     <button onclick="openReportModal()" class="bg-primary hover:bg-blue-900 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition transform hover:scale-110">
                         <i class="fa-solid fa-pen-to-square text-2xl"></i>
@@ -145,26 +220,45 @@
                 </div>
             </main>
 
-            <!-- 拖动按钮 -->
+            <!-- Draggable Btn -->
             <button id="draggableBtn" class="fixed right-0 top-1/2 bg-white text-primary p-3 rounded-l-xl shadow-lg border border-r-0 border-gray-100 hover:bg-gray-50 z-30 w-12 h-14 flex items-center justify-center">
                 <i class="fa-solid fa-chevron-left text-xl pointer-events-none"></i>
             </button>
 
-            <!-- 侧边栏 -->
+            <!-- Sidebar (Enhanced) -->
             <div id="taskSidebar" class="sidebar sidebar-closed fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-40 flex flex-col">
                 <div class="p-4 bg-primary text-white flex justify-between items-center">
                     <h3 class="font-bold">Select Customers</h3>
                     <button onclick="toggleSidebar()"><i class="fa-solid fa-times text-lg"></i></button>
                 </div>
-                <div class="p-3 bg-gray-50 border-b">
+                <div class="p-3 bg-gray-100 border-b space-y-2">
                     <input type="text" placeholder="Filter list..." class="w-full p-2 text-sm border rounded" oninput="filterSidebarList(this.value)">
+                    <select id="sidebarFilterMode" onchange="applySidebarFilter()" class="w-full p-2 text-sm border rounded bg-white font-bold text-gray-600">
+                        <option value="all">Show All Customers</option>
+                        <option value="missed_week">⚠️ Not Visited This Week</option>
+                        <option value="missed_month">⛔ Not Visited This Month</option>
+                    </select>
                 </div>
                 <div id="customerSidebarList" class="flex-1 overflow-y-auto p-2 space-y-2 pb-20"></div>
             </div>
         </div>
     </div>
 
-    <!-- C. 日报 Modal -->
+    <!-- Edit Report Modal (Admin) -->
+    <div id="editReportModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center">
+        <div class="bg-white p-6 rounded shadow-lg w-96">
+            <h3 class="font-bold text-lg mb-4">Modify Data</h3>
+            <input type="hidden" id="editReportId">
+            <label class="text-xs text-gray-500 block mb-1">Outcome Note</label>
+            <textarea id="editReportNote" class="w-full border p-2 rounded h-24"></textarea>
+            <div class="mt-4 flex justify-end space-x-2">
+                <button onclick="document.getElementById('editReportModal').classList.add('hidden')" class="text-gray-500 px-3">Cancel</button>
+                <button onclick="saveEditedReport()" class="bg-primary text-white px-4 py-2 rounded">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal (Sales) -->
     <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white w-full max-w-4xl h-5/6 rounded-xl shadow-2xl flex flex-col overflow-hidden">
             <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
@@ -172,10 +266,6 @@
                 <button onclick="closeReportModal()" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-times text-xl"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-6">
-                <div class="bg-blue-50 text-blue-800 p-3 rounded text-sm mb-4 flex items-center">
-                    <i class="fa-solid fa-circle-info mr-2"></i>
-                    Today's tasks added automatically.
-                </div>
                 <div class="space-y-4" id="reportRows"></div>
                 <button onclick="addReportRow()" class="mt-6 w-full py-3 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-primary hover:text-primary font-bold">
                     <i class="fa-solid fa-plus mr-1"></i> Add Another Customer
@@ -183,74 +273,20 @@
             </div>
             <div class="p-4 border-t bg-gray-50 flex justify-end">
                 <button onclick="submitReport()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold shadow-md flex items-center">
-                    <i class="fa-solid fa-paper-plane mr-2"></i> Submit & Save to Cloud
+                    <i class="fa-solid fa-paper-plane mr-2"></i> Submit & Save
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- D. Insights Modal -->
-    <div id="weeklyReportModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex justify-center items-center p-4">
-        <div class="bg-white w-full max-w-4xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
-            <div class="p-5 bg-white border-b flex justify-between items-center">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800">Cloud Performance</h2>
-                    <div class="flex space-x-6 mt-2 text-sm">
-                        <button onclick="switchInsightTab('week')" id="tabWeek" class="text-primary font-bold border-b-2 border-primary pb-1">This Week</button>
-                        <button onclick="switchInsightTab('history')" id="tabHistory" class="text-gray-500 hover:text-primary pb-1">Monthly History</button>
-                    </div>
-                </div>
-                <button onclick="toggleWeeklyReport()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-2xl"></i></button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
-                <div id="viewWeek" class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div class="bg-white p-4 rounded shadow border-l-4 border-blue-500">
-                            <div class="text-gray-500 text-xs uppercase">Visits This Week</div>
-                            <div class="text-2xl font-bold" id="weekVisitCount">0</div>
-                        </div>
-                        <div class="bg-white p-4 rounded shadow border-l-4 border-green-500">
-                            <div class="text-gray-500 text-xs uppercase">Coverage %</div>
-                            <div class="text-2xl font-bold" id="weekCoverage">0%</div>
-                        </div>
-                        <div class="bg-white p-4 rounded shadow border-l-4 border-red-500">
-                            <div class="text-gray-500 text-xs uppercase">Missed Customers</div>
-                            <div class="text-2xl font-bold" id="weekMissedCount">0</div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-white rounded shadow p-4">
-                            <h4 class="font-bold text-green-700 mb-3 border-b pb-2">✅ Visited This Week</h4>
-                            <ul id="weekVisitedList" class="text-sm space-y-1 text-gray-600 max-h-60 overflow-y-auto"></ul>
-                        </div>
-                        <div class="bg-white rounded shadow p-4">
-                            <h4 class="font-bold text-red-600 mb-3 border-b pb-2">❌ Not Visited This Week</h4>
-                            <ul id="weekMissedList" class="text-sm space-y-1 text-gray-600 max-h-60 overflow-y-auto"></ul>
-                        </div>
-                    </div>
-                </div>
-                <div id="viewHistory" class="hidden">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
-                        <div>
-                            <p class="text-lg font-bold text-gray-800" id="currentMonthTitle">Statistics</p>
-                            <p class="text-xs text-gray-500">Data pulled from Cloud Database.</p>
-                        </div>
-                        <button onclick="exportHistoryToCSV()" class="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 text-sm w-full md:w-auto">
-                            <i class="fa-solid fa-file-csv mr-2"></i> Export Monthly Data
-                        </button>
-                    </div>
-                    <div class="space-y-3" id="historyListContainer"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
+        // --- Configuration & Globals ---
         let allSalesData = [];
         let myCustomers = [];
-        let currentUser = null;
+        let currentUser = null; // { code, name, isAdmin }
         let todayTasks = [];
-        let globalHistory = []; 
+        let globalHistory = []; // Sales: his history; Admin: all history
+        let adminTasks = []; // Shared task list
 
         const repDirectory = {
             "10543": "Beny", "10882": "Prince", "10989": "Abigail", "11006": "Hilda", "11029": "Linda"
@@ -261,39 +297,18 @@
             initDraggable();
         };
 
-        // --- Draggable Button ---
+        // --- Draggable ---
         function initDraggable() {
             const btn = document.getElementById("draggableBtn");
-            let isDragging = false;
-            let startY, startTop;
-            const onTouchStart = (e) => {
-                isDragging = false;
-                const touch = e.touches ? e.touches[0] : e;
-                startY = touch.clientY;
-                startTop = btn.offsetTop;
-                document.addEventListener('mousemove', onTouchMove); document.addEventListener('mouseup', onTouchEnd);
-                document.addEventListener('touchmove', onTouchMove, {passive: false}); document.addEventListener('touchend', onTouchEnd);
-            };
-            const onTouchMove = (e) => {
-                const touch = e.touches ? e.touches[0] : e;
-                const deltaY = touch.clientY - startY;
-                if (Math.abs(deltaY) > 5) isDragging = true;
-                if (!isDragging) return;
-                e.preventDefault();
-                let newTop = startTop + deltaY;
-                const maxTop = window.innerHeight - 60;
-                if (newTop < 50) newTop = 50; if (newTop > maxTop) newTop = maxTop;
-                btn.style.top = newTop + "px";
-            };
-            const onTouchEnd = () => {
-                document.removeEventListener('mousemove', onTouchMove); document.removeEventListener('mouseup', onTouchEnd);
-                document.removeEventListener('touchmove', onTouchMove); document.removeEventListener('touchend', onTouchEnd);
-            };
-            btn.addEventListener('mousedown', onTouchStart); btn.addEventListener('touchstart', onTouchStart);
-            btn.onclick = (e) => { if (isDragging) { e.preventDefault(); isDragging = false; } else { toggleSidebar(); } };
+            let isDragging = false, startY, startTop;
+            const start = (e) => { isDragging=false; startY=(e.touches?e.touches[0]:e).clientY; startTop=btn.offsetTop; document.addEventListener('mousemove',move);document.addEventListener('touchmove',move,{passive:false});document.addEventListener('mouseup',end);document.addEventListener('touchend',end); };
+            const move = (e) => { const y = (e.touches?e.touches[0]:e).clientY; if(Math.abs(y-startY)>5) isDragging=true; if(isDragging){ e.preventDefault(); let nT=startTop+(y-startY); nT=Math.max(50,Math.min(window.innerHeight-60,nT)); btn.style.top=nT+'px'; } };
+            const end = () => { document.removeEventListener('mousemove',move);document.removeEventListener('touchmove',move);document.removeEventListener('mouseup',end);document.removeEventListener('touchend',end); };
+            btn.addEventListener('mousedown',start); btn.addEventListener('touchstart',start);
+            btn.onclick = (e) => { if(isDragging)e.preventDefault(); else toggleSidebar(); };
         }
 
-        // --- Login & Cloud Sync ---
+        // --- Data Loading ---
         function loadCSV() {
             Papa.parse("customers.csv", {
                 download: true, header: true, skipEmptyLines: true,
@@ -306,6 +321,7 @@
                         phone: (item.Phone || item.phone || "").trim(),
                         credit: (item.Credit || item.credit || "0").trim()
                     }));
+                    initAdminRepSelect();
                 }
             });
         }
@@ -314,97 +330,352 @@
             const code = document.getElementById('loginRepCode').value.trim();
             const pass = document.getElementById('loginPassword').value.trim();
             const status = document.getElementById('loginStatus');
-            
+
+            // 1. Admin Login
+            if (code.toLowerCase() === 'admin' && pass === '8888') {
+                currentUser = { code: 'admin', name: 'Administrator', isAdmin: true };
+                document.getElementById('globalLoader').classList.remove('hidden');
+                await loadAllDataForAdmin();
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('adminSection').classList.remove('hidden');
+                document.getElementById('globalLoader').classList.add('hidden');
+                renderAdminTasks();
+                return;
+            }
+
+            // 2. Sales Login
             if (pass !== '0000') { status.innerText = "Wrong Password"; status.classList.remove('hidden'); return; }
             const customers = allSalesData.filter(c => c.repCode == code);
-            if (customers.length === 0) { status.innerText = `No customers found for code: ${code}`; status.classList.remove('hidden'); return; }
+            if (customers.length === 0) { status.innerText = "Code not found"; status.classList.remove('hidden'); return; }
 
             myCustomers = customers;
             let finalName = repDirectory[code] || customers[0].csvRepName;
-            currentUser = { code: code, name: finalName };
+            currentUser = { code: code, name: finalName, isAdmin: false };
             
-            // 显示加载遮罩
             document.getElementById('globalLoader').classList.remove('hidden');
-
             try {
-                // 1. 同步 Today Tasks
-                await loadTasksFromCloud();
-                
-                // 2. 同步 历史报告
-                await loadHistoryFromCloud();
+                await loadTasksFromCloud(); // Today's plan
+                await loadHistoryFromCloud(); // Reports (for sidebar stats)
+                await loadAssignedTasksForRep(); // Tasks assigned by admin
 
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('appSection').classList.remove('hidden');
                 document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`;
                 document.getElementById('globalLoader').classList.add('hidden');
                 
-                loadCustomersToSidebar(myCustomers);
-                renderTasks(); 
+                applySidebarFilter(); // Render sidebar with stats
+                renderTasks();
+                renderAcceptTasks();
+            } catch (e) { console.error(e); status.innerText="Cloud connection failed"; status.classList.remove('hidden'); document.getElementById('globalLoader').classList.add('hidden'); }
+        }
+        
+        function logout() { location.reload(); }
 
-            } catch (error) {
-                console.error("Cloud Error", error);
-                document.getElementById('globalLoader').classList.add('hidden');
-                status.innerText = "Error connecting to cloud. Did you enable Firestore?";
-                status.classList.remove('hidden');
+        // ================= ADMIN FUNCTIONS =================
+
+        async function loadAllDataForAdmin() {
+            // Get Admin Tasks
+            const taskSnap = await db.collection('admin_tasks').orderBy('timestamp', 'desc').get();
+            adminTasks = [];
+            taskSnap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
+
+            // Get All Reports
+            const repSnap = await db.collection('reports').orderBy('timestamp', 'desc').get();
+            globalHistory = [];
+            repSnap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
+        }
+
+        function switchAdminTab(tab) {
+            ['assign','history','reports'].forEach(t => {
+                document.getElementById(`adminTab${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.add('hidden');
+                document.getElementById(`btnTab${t.charAt(0).toUpperCase()+t.slice(1)}`).className = "flex-1 py-3 hover:bg-gray-600 text-gray-300";
+            });
+            document.getElementById(`adminTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.remove('hidden');
+            document.getElementById(`btnTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).className = "flex-1 py-3 hover:bg-gray-600 text-accent font-bold border-b-2 border-accent";
+            if(tab === 'reports') renderAdminReports();
+        }
+
+        function initAdminRepSelect() {
+            const sel = document.getElementById('adminAssignRep');
+            sel.innerHTML = '<option value="">Select Rep...</option>';
+            for (const [code, name] of Object.entries(repDirectory)) {
+                sel.innerHTML += `<option value="${code}">${name} (${code})</option>`;
             }
         }
 
-        function logout() { location.reload(); }
-
-        // --- Cloud Functions ---
-
-        async function loadTasksFromCloud() {
-            const docRef = db.collection('daily_tasks').doc(currentUser.code);
-            const doc = await docRef.get();
-            
-            if (doc.exists) {
-                const data = doc.data();
-                const todayStr = new Date().toLocaleDateString();
-                if (data.date === todayStr) {
-                    todayTasks = data.tasks || [];
-                } else {
-                    todayTasks = [];
-                    await docRef.set({ date: todayStr, tasks: [] });
+        function searchAdminCust(inp) {
+            const val = inp.value.toLowerCase();
+            const box = document.getElementById('adminCustResults');
+            if(val.length<2) { box.classList.add('hidden'); return; }
+            box.innerHTML = ''; box.classList.remove('hidden');
+            allSalesData.filter(c => c.name.toLowerCase().includes(val) || c.id.toLowerCase().includes(val)).slice(0,10).forEach(c => {
+                const d = document.createElement('div');
+                d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm";
+                d.innerText = `${c.name} (${c.id}) - ${c.repCode}`;
+                d.onclick = () => {
+                    inp.value = c.name;
+                    document.getElementById('adminAssignCustId').value = c.id;
+                    document.getElementById('adminAssignCustName').value = c.name;
+                    box.classList.add('hidden');
                 }
-            } else {
-                todayTasks = [];
+                box.appendChild(d);
+            });
+        }
+
+        async function adminSubmitTask() {
+            const repCode = document.getElementById('adminAssignRep').value;
+            const custId = document.getElementById('adminAssignCustId').value;
+            const custName = document.getElementById('adminAssignCustName').value;
+            const note = document.getElementById('adminAssignNote').value;
+
+            if(!repCode || !custId || !note) return alert("Please fill all fields");
+
+            const newTask = {
+                repCode: repCode,
+                repName: repDirectory[repCode] || repCode,
+                customerId: custId,
+                customerName: custName,
+                taskDetail: note,
+                status: 'pending', // pending, completed
+                assignedDate: new Date().toLocaleDateString(),
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const ref = await db.collection('admin_tasks').add(newTask);
+            adminTasks.unshift({ docId: ref.id, ...newTask }); // Update local
+            
+            alert("Task Assigned!");
+            document.getElementById('adminAssignNote').value = '';
+            document.getElementById('adminAssignCustSearch').value = '';
+        }
+
+        function renderAdminTasks() {
+            const filter = document.getElementById('adminTaskFilter').value.toLowerCase();
+            const container = document.getElementById('adminTaskList');
+            container.innerHTML = '';
+            
+            adminTasks.filter(t => 
+                t.repName.toLowerCase().includes(filter) || 
+                t.customerName.toLowerCase().includes(filter) || 
+                t.assignedDate.includes(filter)
+            ).forEach(t => {
+                const div = document.createElement('div');
+                div.className = `p-3 rounded border flex justify-between items-center ${t.status === 'completed' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`;
+                div.innerHTML = `
+                    <div>
+                        <div class="font-bold text-gray-800">${t.repName} <span class="text-gray-400 text-xs">-></span> ${t.customerName}</div>
+                        <div class="text-xs text-gray-500">${t.assignedDate} | Note: ${t.taskDetail}</div>
+                        <div class="mt-1 text-xs font-bold uppercase ${t.status==='completed'?'text-green-600':'text-orange-500'}">Status: ${t.status}</div>
+                    </div>
+                    ${t.status === 'completed' ? `<button onclick="adminRestoreTask('${t.docId}')" class="text-blue-500 text-xs underline">Undo/Restore</button>` : ''}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function adminRestoreTask(docId) {
+            if(!confirm("Restore this task to Pending?")) return;
+            await db.collection('admin_tasks').doc(docId).update({ status: 'pending' });
+            const task = adminTasks.find(t => t.docId === docId);
+            if(task) task.status = 'pending';
+            renderAdminTasks();
+        }
+
+        function renderAdminReports() {
+            const filter = document.getElementById('adminReportFilter').value.toLowerCase();
+            const tbody = document.getElementById('adminReportTableBody');
+            tbody.innerHTML = '';
+            
+            globalHistory.filter(r => 
+                r.repCode.toLowerCase().includes(filter) || 
+                (r.customerName && r.customerName.toLowerCase().includes(filter)) ||
+                new Date(r.date).toLocaleDateString().includes(filter)
+            ).forEach(r => {
+                const dateStr = new Date(r.date).toLocaleDateString();
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-gray-50";
+                tr.innerHTML = `
+                    <td class="p-3">${dateStr}</td>
+                    <td class="p-3 font-bold">${repDirectory[r.repCode] || r.repCode}</td>
+                    <td class="p-3">${r.customerName}</td>
+                    <td class="p-3 text-gray-600">${r.note}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="openEditReport('${r.docId}', '${r.note.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fa-solid fa-pen"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openEditReport(docId, note) {
+            document.getElementById('editReportId').value = docId;
+            document.getElementById('editReportNote').value = note;
+            document.getElementById('editReportModal').classList.remove('hidden');
+        }
+
+        async function saveEditedReport() {
+            const id = document.getElementById('editReportId').value;
+            const newNote = document.getElementById('editReportNote').value;
+            await db.collection('reports').doc(id).update({ note: newNote });
+            
+            // Update local
+            const rep = globalHistory.find(r => r.docId === id);
+            if(rep) rep.note = newNote;
+            
+            document.getElementById('editReportModal').classList.add('hidden');
+            renderAdminReports();
+        }
+
+        function adminExportReports() {
+            let csv = "Date,RepName,Customer,Note\n";
+            globalHistory.forEach(r => {
+                const repName = repDirectory[r.repCode] || r.repCode;
+                csv += `${new Date(r.date).toLocaleDateString()},${repName},${r.customerName},"${r.note}"\n`;
+            });
+            const link = document.createElement("a");
+            link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
+            link.download = `All_Reports_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link); link.click();
+        }
+
+        // ================= SALES REP FUNCTIONS =================
+
+        // 1. Sidebar Stats & Filters
+        function getCustomerStats(custId) {
+            const now = new Date();
+            const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay() + 1); startOfWeek.setHours(0,0,0,0);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            let week = 0, month = 0;
+            globalHistory.forEach(h => {
+                if (h.customerId === custId) {
+                    const d = new Date(h.date);
+                    if (d >= startOfWeek) week++;
+                    if (d >= startOfMonth) month++;
+                }
+            });
+            return { week, month };
+        }
+
+        function applySidebarFilter() {
+            const mode = document.getElementById('sidebarFilterMode').value;
+            const q = document.querySelector('#taskSidebar input').value.toLowerCase();
+            
+            let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q));
+            
+            if (mode === 'missed_week') {
+                filtered = filtered.filter(c => getCustomerStats(c.id).week === 0);
+            } else if (mode === 'missed_month') {
+                filtered = filtered.filter(c => getCustomerStats(c.id).month === 0);
             }
+            
+            const list = document.getElementById('customerSidebarList');
+            list.innerHTML = '';
+            filtered.slice(0, 100).forEach(c => {
+                const stats = getCustomerStats(c.id);
+                const item = document.createElement('div');
+                item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer";
+                item.innerHTML = `
+                    <div>
+                        <div class="font-bold text-gray-700 text-sm">${c.name}</div>
+                        <div class="text-xs text-gray-400">${c.id}</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="text-[10px] text-gray-500 text-right mr-2">
+                            <div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div>
+                            <div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div>
+                        </div>
+                        <button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500"><i class="fa-solid fa-plus-circle text-xl"></i></button>
+                    </div>`;
+                list.appendChild(item);
+            });
+        }
+        function filterSidebarList(val) { applySidebarFilter(); } // Re-trigger filter
+
+        // 2. Accept Task Logic
+        async function loadAssignedTasksForRep() {
+            const snap = await db.collection('admin_tasks')
+                                 .where('repCode', '==', currentUser.code)
+                                 .where('status', '==', 'pending')
+                                 .get();
+            adminTasks = [];
+            snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
+        }
+
+        function renderAcceptTasks() {
+            const container = document.getElementById('acceptTaskList');
+            const section = document.getElementById('acceptTaskSection');
+            
+            if (adminTasks.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+            section.classList.remove('hidden');
+            container.innerHTML = '';
+
+            adminTasks.forEach(t => {
+                const div = document.createElement('div');
+                div.id = `accept-${t.docId}`;
+                div.className = "bg-white p-4 rounded shadow border-l-4 border-primary flex justify-between items-center animate-fade-in";
+                div.innerHTML = `
+                    <div>
+                        <div class="font-bold text-gray-800">${t.customerName} <span class="text-xs bg-gray-200 px-1 rounded">${t.customerId}</span></div>
+                        <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-user-tag mr-1"></i> Admin Task: ${t.taskDetail}</div>
+                    </div>
+                    <div class="flex space-x-3">
+                        <button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-8 h-8 rounded-full hover:bg-green-200 text-green-600 shadow" title="Add to Today's Plan">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                        <button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-8 h-8 rounded-full hover:bg-blue-800 text-white shadow" title="Mark Completed">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function addTaskToToday(docId, custId) {
+            addToTask(custId);
+            // Visual feedback
+            const btn = document.querySelector(`#accept-${docId} button`);
+            if(btn) btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>';
+        }
+
+        async function completeAssignedTask(docId) {
+            if(!confirm("Mark this task as completed? It will be removed from your list.")) return;
+            
+            // Update Firestore
+            await db.collection('admin_tasks').doc(docId).update({ status: 'completed', completedDate: new Date().toISOString() });
+            
+            // Animate and remove
+            const el = document.getElementById(`accept-${docId}`);
+            el.classList.add('task-fade-out');
+            setTimeout(() => {
+                adminTasks = adminTasks.filter(t => t.docId !== docId);
+                renderAcceptTasks();
+            }, 500);
+        }
+
+        // --- Core Sales Logic (Same as before, modified for cloud) ---
+        async function loadTasksFromCloud() {
+            const doc = await db.collection('daily_tasks').doc(currentUser.code).get();
+            if (doc.exists && doc.data().date === new Date().toLocaleDateString()) {
+                todayTasks = doc.data().tasks || [];
+            } else { todayTasks = []; }
         }
 
         async function saveTasksToCloud() {
-            if(!currentUser) return;
-            const docRef = db.collection('daily_tasks').doc(currentUser.code);
-            await docRef.set({
-                date: new Date().toLocaleDateString(),
-                tasks: todayTasks
-            });
+            if(!currentUser || currentUser.isAdmin) return;
+            await db.collection('daily_tasks').doc(currentUser.code).set({ date: new Date().toLocaleDateString(), tasks: todayTasks });
         }
 
         async function loadHistoryFromCloud() {
-            const snapshot = await db.collection('reports')
-                                     .where('repCode', '==', currentUser.code)
-                                     .get();
+            // Load ONLY this rep's history for sidebar stats
+            const snap = await db.collection('reports').where('repCode', '==', currentUser.code).get();
             globalHistory = [];
-            snapshot.forEach(doc => {
-                globalHistory.push(doc.data());
-            });
+            snap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
         }
-
-        async function saveReportToCloud(newReports) {
-            const batch = db.batch();
-            newReports.forEach(report => {
-                const ref = db.collection('reports').doc(); 
-                batch.set(ref, {
-                    ...report,
-                    repCode: currentUser.code, 
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            });
-            await batch.commit();
-            globalHistory = globalHistory.concat(newReports);
-        }
-
-        // --- Core UI Logic ---
 
         function handleMainSearch(query) {
             const container = document.getElementById('mainSearchResult');
@@ -412,55 +683,29 @@
             const res = myCustomers.find(c => c.name.toLowerCase().includes(query.toLowerCase()) || c.id.toLowerCase().includes(query.toLowerCase()));
             container.classList.remove('hidden');
             if (res) {
-                container.innerHTML = `
-                    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col md:flex-row justify-between items-center">
-                        <div class="mb-4 md:mb-0 text-left">
-                            <h3 class="text-xl font-bold text-primary">${res.name}</h3>
-                            <div class="text-sm text-gray-500 mt-2 space-y-1">
-                                <div><i class="fa-solid fa-id-badge mr-2 w-5"></i> ${res.id}</div>
-                                <div><a href="tel:${res.phone}" class="text-blue-600 hover:underline font-bold"><i class="fa-solid fa-phone mr-2 w-5"></i> ${res.phone}</a></div>
-                                <div><i class="fa-solid fa-wallet mr-2 w-5"></i> Limit: ${res.credit}</div>
-                            </div>
-                        </div>
-                        <button onclick="requestStatement('${res.name}', '${res.id}')" class="bg-green-100 text-green-700 px-5 py-2 rounded-lg font-bold hover:bg-green-200 transition">
-                            <i class="fa-brands fa-whatsapp mr-2"></i> Statement
-                        </button>
-                    </div>`;
+                container.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col md:flex-row justify-between items-center"><div class="mb-4 md:mb-0 text-left"><h3 class="text-xl font-bold text-primary">${res.name}</h3><div class="text-sm text-gray-500 mt-2 space-y-1"><div><i class="fa-solid fa-id-badge mr-2 w-5"></i> ${res.id}</div><div><a href="tel:${res.phone}" class="text-blue-600 hover:underline font-bold"><i class="fa-solid fa-phone mr-2 w-5"></i> ${res.phone}</a></div><div><i class="fa-solid fa-wallet mr-2 w-5"></i> Limit: ${res.credit}</div></div></div><button onclick="window.open('https://wa.me/233550584720?text=${encodeURIComponent(`I want statement of ${res.name} (${res.id})`)}', '_blank')" class="bg-green-100 text-green-700 px-5 py-2 rounded-lg font-bold hover:bg-green-200 transition"><i class="fa-brands fa-whatsapp mr-2"></i> Statement</button></div>`;
             } else { container.innerHTML = `<div class="bg-white p-4 rounded-xl text-center text-gray-400">Not Found</div>`; }
         }
-        function requestStatement(name, code) { window.open(`https://wa.me/233550584720?text=${encodeURIComponent(`I want statement of ${name} (${code})`)}`, '_blank'); }
 
         function toggleSidebar() { const sb = document.getElementById('taskSidebar'); sb.classList.toggle('sidebar-closed'); sb.classList.toggle('sidebar-open'); }
-        function loadCustomersToSidebar(data) {
-            const list = document.getElementById('customerSidebarList'); list.innerHTML = '';
-            data.slice(0, 100).forEach(c => {
-                const item = document.createElement('div'); item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer";
-                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div>
-                    <button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500"><i class="fa-solid fa-plus-circle text-xl"></i></button>`;
-                list.appendChild(item);
-            });
-        }
-        function filterSidebarList(q) { const filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q.toLowerCase())); loadCustomersToSidebar(filtered); }
-
+        
         function addToTask(id) {
             if (!todayTasks.some(t => t.id === id)) {
                 todayTasks.push(myCustomers.find(c => c.id === id));
-                saveTasksToCloud(); 
-                renderTasks();
+                saveTasksToCloud(); renderTasks();
             }
         }
-        function removeFromTask(id) { todayTasks = todayTasks.filter(t => t.id !== id); saveTasksToCloud(); renderTasks(); } 
+        function removeFromTask(id) { todayTasks = todayTasks.filter(t => t.id !== id); saveTasksToCloud(); renderTasks(); }
 
         function renderTasks() {
             const box = document.getElementById('todayTaskList'); box.innerHTML = '';
             todayTasks.forEach(t => {
                 const card = document.createElement('div'); card.className = "bg-white p-4 rounded-lg shadow-sm border relative group";
-                card.innerHTML = `<h4 class="font-bold text-gray-800">${t.name}</h4>
-                    <a href="tel:${t.phone}" class="text-xs text-blue-500 hover:underline block my-1"><i class="fa-solid fa-phone"></i> ${t.phone}</a>
-                    <button onclick="removeFromTask('${t.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>`;
+                card.innerHTML = `<h4 class="font-bold text-gray-800">${t.name}</h4><a href="tel:${t.phone}" class="text-xs text-blue-500 hover:underline block my-1"><i class="fa-solid fa-phone"></i> ${t.phone}</a><button onclick="removeFromTask('${t.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>`;
                 box.appendChild(card);
             });
         }
+        
         function shareTaskToGroup() {
             if(todayTasks.length === 0) return alert("Task list is empty");
             let msg = `*${currentUser.name}'s Plan*\n${new Date().toLocaleDateString()}\n------------------\n`;
@@ -468,7 +713,6 @@
             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
-        // --- Report ---
         function openReportModal() {
             const modal = document.getElementById('reportModal'); const container = document.getElementById('reportRows');
             modal.classList.remove('hidden'); container.innerHTML = ''; 
@@ -480,12 +724,7 @@
             const id = Date.now() + Math.random(); const div = document.createElement('div');
             div.id = `row-${id}`; div.className = "bg-gray-50 p-4 rounded border relative";
             const custName = prefillData ? prefillData.name : ""; const custId = prefillData ? prefillData.id : "";
-            div.innerHTML = `<button onclick="document.getElementById('row-${id}').remove()" class="absolute right-2 top-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-times"></i></button>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="relative"><label class="text-xs font-bold text-gray-400">CUSTOMER</label>
-                <input type="text" value="${custName}" class="w-full p-2 border rounded mt-1 bg-white" placeholder="Search..." onkeyup="searchRepCust(this, '${id}')">
-                <div id="res-${id}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden rounded border"></div>
-                <input type="hidden" id="vid-${id}" class="r-id" value="${custId}"><input type="hidden" id="vnm-${id}" class="r-nm" value="${custName}"></div>
-                <div class="md:col-span-2"><label class="text-xs font-bold text-gray-400">OUTCOME</label><input type="text" class="r-note w-full p-2 border rounded mt-1 bg-white" placeholder="Result..."></div></div>`;
+            div.innerHTML = `<button onclick="document.getElementById('row-${id}').remove()" class="absolute right-2 top-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-times"></i></button><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="relative"><label class="text-xs font-bold text-gray-400">CUSTOMER</label><input type="text" value="${custName}" class="w-full p-2 border rounded mt-1 bg-white" placeholder="Search..." onkeyup="searchRepCust(this, '${id}')"><div id="res-${id}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden rounded border"></div><input type="hidden" id="vid-${id}" class="r-id" value="${custId}"><input type="hidden" id="vnm-${id}" class="r-nm" value="${custName}"></div><div class="md:col-span-2"><label class="text-xs font-bold text-gray-400">OUTCOME</label><input type="text" class="r-note w-full p-2 border rounded mt-1 bg-white" placeholder="Result..."></div></div>`;
             document.getElementById('reportRows').appendChild(div);
         }
         function searchRepCust(inp, id) {
@@ -493,9 +732,7 @@
             if(val.length<1) { box.classList.add('hidden'); return; }
             box.innerHTML = ''; box.classList.remove('hidden');
             myCustomers.filter(c=>c.name.toLowerCase().includes(val)).slice(0,5).forEach(c=>{
-                const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name;
-                d.onclick=()=>{ inp.value=c.name; document.getElementById(`vid-${id}`).value=c.id; document.getElementById(`vnm-${id}`).value=c.name; box.classList.add('hidden'); };
-                box.appendChild(d);
+                const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name; d.onclick=()=>{ inp.value=c.name; document.getElementById(`vid-${id}`).value=c.id; document.getElementById(`vnm-${id}`).value=c.name; box.classList.add('hidden'); }; box.appendChild(d);
             });
         }
 
@@ -504,112 +741,25 @@
             let txt = `*Report-${currentUser.name}*\n${new Date().toLocaleDateString()}\n\n`;
             let historyBatch = [];
             let hasData = false;
-
             rows.forEach(r => {
-                const rowId = r.id.split('-')[1];
-                const nm = document.getElementById(`vnm-${rowId}`).value;
+                const rowId = r.id.split('-')[1]; const nm = document.getElementById(`vnm-${rowId}`).value;
                 const note = r.parentElement.parentElement.parentElement.querySelector('.r-note').value;
                 if(nm && note) {
                     txt += `📍 *${nm}*\n   └ ${note}\n`;
-                    historyBatch.push({ date: new Date().toISOString(), customerId: r.value, customerName: nm, note: note });
+                    historyBatch.push({ date: new Date().toISOString(), customerId: r.value, customerName: nm, note: note, repCode: currentUser.code });
                     hasData = true;
                 }
             });
-
             if(!hasData) return alert("Fill report details");
-
             try {
-                await saveReportToCloud(historyBatch);
+                const batch = db.batch();
+                historyBatch.forEach(r => { const ref = db.collection('reports').doc(); batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); });
+                await batch.commit();
+                globalHistory = globalHistory.concat(historyBatch); // Update local stats immediately
+                applySidebarFilter(); // Refresh sidebar stats
                 window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
                 closeReportModal();
-            } catch(e) {
-                alert("Failed to save to cloud.");
-                console.error(e);
-            }
-        }
-
-        // --- Insights ---
-        function toggleWeeklyReport() {
-            const m = document.getElementById('weeklyReportModal');
-            if(m.classList.contains('hidden')) { m.classList.remove('hidden'); switchInsightTab('week'); } 
-            else { m.classList.add('hidden'); }
-        }
-        function switchInsightTab(tab) {
-            const viewWeek = document.getElementById('viewWeek'); const viewHist = document.getElementById('viewHistory');
-            const tabWeek = document.getElementById('tabWeek'); const tabHist = document.getElementById('tabHistory');
-            if(tab === 'week') {
-                viewWeek.classList.remove('hidden'); viewHist.classList.add('hidden');
-                tabWeek.className = "text-primary font-bold border-b-2 border-primary pb-1"; tabHist.className = "text-gray-500 hover:text-primary pb-1";
-                renderWeeklyStats();
-            } else {
-                viewWeek.classList.add('hidden'); viewHist.classList.remove('hidden');
-                tabWeek.className = "text-gray-500 hover:text-primary pb-1"; tabHist.className = "text-primary font-bold border-b-2 border-primary pb-1";
-                renderMonthlyStats();
-            }
-        }
-
-        function getMonthlyHistory() {
-            const now = new Date();
-            return globalHistory.filter(item => {
-                const d = new Date(item.date);
-                return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-            });
-        }
-
-        function renderWeeklyStats() {
-            const now = new Date();
-            const day = now.getDay() || 7; 
-            if(day !== 1) now.setHours(-24 * (day - 1)); else now.setHours(0,0,0,0);
-            const mondayTime = now.getTime(); 
-
-            const visitedThisWeekIds = new Set(globalHistory.filter(h => new Date(h.date).getTime() > mondayTime).map(h => h.customerId));
-            const visitedList = myCustomers.filter(c => visitedThisWeekIds.has(c.id));
-            const missedList = myCustomers.filter(c => !visitedThisWeekIds.has(c.id));
-
-            document.getElementById('weekVisitCount').innerText = visitedList.length;
-            document.getElementById('weekMissedCount').innerText = missedList.length;
-            document.getElementById('weekCoverage').innerText = Math.round((visitedList.length / myCustomers.length) * 100) + "%";
-
-            const vList = document.getElementById('weekVisitedList');
-            vList.innerHTML = visitedList.length ? '' : '<li class="text-gray-400 italic">No visits this week</li>';
-            visitedList.forEach(c => vList.innerHTML += `<li>${c.name}</li>`);
-            const mList = document.getElementById('weekMissedList');
-            mList.innerHTML = '';
-            missedList.forEach(c => mList.innerHTML += `<li>${c.name}</li>`);
-        }
-
-        function renderMonthlyStats() {
-            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            const now = new Date();
-            document.getElementById('currentMonthTitle').innerText = `${monthNames[now.getMonth()]} Statistics`;
-
-            const monthlyData = getMonthlyHistory();
-            const counts = {};
-            monthlyData.forEach(h => { counts[h.customerId] = (counts[h.customerId] || 0) + 1; });
-
-            const container = document.getElementById('historyListContainer'); container.innerHTML = '';
-            myCustomers.forEach(c => {
-                const visitCount = counts[c.id] || 0; const isMissed = visitCount === 0;
-                const card = document.createElement('div');
-                card.className = isMissed ? "bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-sm flex justify-between items-center" : "bg-white border-l-4 border-green-500 p-4 rounded shadow-sm flex justify-between items-center";
-                card.innerHTML = `<div class="overflow-hidden"><div class="font-bold text-gray-800 text-base truncate pr-2">${c.name}</div><div class="text-sm text-gray-500 mt-1 flex items-center space-x-3"><span>${c.id}</span><a href="tel:${c.phone}" class="text-blue-600"><i class="fa-solid fa-phone"></i> ${c.phone}</a></div></div><div class="flex-shrink-0 text-center ml-2"><div class="${isMissed ? 'text-red-600' : 'text-green-600'} font-bold text-xl">${visitCount}</div><div class="text-[10px] text-gray-400 uppercase">Visits</div></div>`;
-                container.appendChild(card);
-            });
-        }
-
-        function exportHistoryToCSV() {
-            const monthlyData = getMonthlyHistory();
-            const counts = {};
-            monthlyData.forEach(h => { counts[h.customerId] = (counts[h.customerId] || 0) + 1; });
-            let csvContent = "data:text/csv;charset=utf-8,Code,Name,Phone,MonthVisits,Status\n";
-            myCustomers.forEach(c => {
-                const count = counts[c.id] || 0; const status = count === 0 ? "NOT VISITED" : "VISITED";
-                csvContent += `${c.id},${c.name},${c.phone},${count},${status}\n`;
-            });
-            const encodedUri = encodeURI(csvContent); const link = document.createElement("a");
-            const dateStr = new Date().toISOString().slice(0,7);
-            link.setAttribute("href", encodedUri); link.setAttribute("download", `Monthly_Stats_${currentUser.name}_${dateStr}.csv`);
-            document.body.appendChild(link); link.click();
+            } catch(e) { alert("Failed to save to cloud."); console.error(e); }
         }
     </script>
 </body>
