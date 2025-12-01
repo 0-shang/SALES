@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 6.0</title>
+    <title>Sales Master Pro 7.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
-    <!-- Firebase SDK (Compat) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
         // ----------------------------------------------------
-        // ★★★ 这里是你提供的真实 Firebase 配置 ★★★
+        // ★★★ Firebase 配置 ★★★
         // ----------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyCE1Jsq7LPBcJdPcW7DPMAEfxQ6dJHCIb4",
@@ -47,7 +47,6 @@
         #draggableBtn:active { cursor: grabbing; }
         .spinner { border: 4px solid rgba(0,0,0,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #1e3a8a; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* 任务完成动画 */
         .task-fade-out { animation: fadeOut 0.5s forwards; }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(20px); height: 0; padding: 0; margin: 0; } }
     </style>
@@ -55,7 +54,7 @@
 <body class="bg-gray-100 text-gray-800 font-sans h-screen overflow-hidden flex flex-col">
 
     <!-- Global Loader -->
-    <div id="globalLoader" class="fixed inset-0 z-[70] bg-white flex flex-col items-center justify-center hidden">
+    <div id="globalLoader" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center hidden">
         <div class="spinner mb-4"></div>
         <p class="text-gray-500">Syncing Data...</p>
     </div>
@@ -77,7 +76,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
                     <input type="password" id="loginPassword" placeholder="••••" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none">
                 </div>
-                <button onclick="handleLogin()" class="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-blue-900 transition">LOGIN</button>
+                <button onclick="performLogin()" class="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-blue-900 transition">LOGIN</button>
             </div>
         </div>
     </div>
@@ -101,45 +100,40 @@
         </header>
 
         <main class="flex-1 overflow-y-auto p-4 bg-gray-100">
-            <!-- 1. Assign Task Tab -->
-            <div id="adminTabAssign" class="max-w-3xl mx-auto space-y-6">
-                <div class="bg-white p-6 rounded-lg shadow">
-                    <h3 class="font-bold text-gray-700 mb-4 text-lg border-b pb-2">Create New Task</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">SELECT SALES REP</label>
-                            <select id="adminAssignRep" class="w-full p-2 border rounded mt-1 bg-gray-50"></select>
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500">SELECT CUSTOMER</label>
-                            <div class="relative">
-                                <input type="text" id="adminAssignCustSearch" placeholder="Search customer..." class="w-full p-2 border rounded mt-1" onkeyup="searchAdminCust(this)">
-                                <div id="adminCustResults" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div>
-                                <input type="hidden" id="adminAssignCustId">
-                                <input type="hidden" id="adminAssignCustName">
-                            </div>
-                        </div>
+            <!-- 1. Assign Task Tab (Bulk) -->
+            <div id="adminTabAssign" class="max-w-4xl mx-auto space-y-4">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 class="font-bold text-gray-700">Bulk Task Assignment</h3>
+                        <button onclick="addAssignRow()" class="bg-gray-100 hover:bg-gray-200 text-primary px-3 py-1 rounded text-sm font-bold">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Row
+                        </button>
                     </div>
-                    <div class="mb-4">
-                        <label class="text-xs font-bold text-gray-500">TASK DETAIL / INSTRUCTION</label>
-                        <textarea id="adminAssignNote" class="w-full p-3 border rounded mt-1 h-20" placeholder="e.g. Visit to collect check..."></textarea>
+                    
+                    <div id="assignRowsContainer" class="space-y-4">
+                        <!-- Rows will be added here -->
                     </div>
-                    <button onclick="adminSubmitTask()" class="bg-primary text-white px-6 py-2 rounded shadow hover:bg-blue-800 font-bold w-full md:w-auto">
-                        <i class="fa-solid fa-paper-plane mr-2"></i> Assign Task
-                    </button>
+
+                    <div class="mt-6 pt-4 border-t">
+                        <button onclick="adminSubmitBulkTasks()" class="bg-primary text-white px-8 py-3 rounded shadow hover:bg-blue-800 font-bold w-full md:w-auto flex justify-center items-center">
+                            <i class="fa-solid fa-paper-plane mr-2"></i> Assign All Tasks
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <!-- 2. History Task Tab -->
             <div id="adminTabHistory" class="max-w-5xl mx-auto hidden space-y-4">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-2">
-                    <input type="text" id="adminTaskFilter" placeholder="Filter by Rep, Date or Customer..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminTasks()">
-                    <div class="text-xs text-gray-500"><i class="fa-solid fa-circle-info"></i> Click 'Undo' to restore accidental completions.</div>
+                    <input type="text" id="adminTaskFilter" placeholder="Filter tasks..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminTasks()">
+                    <button onclick="adminExportTasks()" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow">
+                        <i class="fa-solid fa-file-csv mr-2"></i> Export Tasks CSV
+                    </button>
                 </div>
                 <div id="adminTaskList" class="space-y-3"></div>
             </div>
 
-            <!-- 3. All Reports Tab (Data Modify) -->
+            <!-- 3. All Reports Tab (Read Only) -->
             <div id="adminTabReports" class="max-w-6xl mx-auto hidden space-y-4">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-2 mb-4">
                     <input type="text" id="adminReportFilter" placeholder="Filter reports..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminReports()">
@@ -153,7 +147,6 @@
                                 <th class="p-3">Rep</th>
                                 <th class="p-3">Customer</th>
                                 <th class="p-3">Note (Outcome)</th>
-                                <th class="p-3 text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody id="adminReportTableBody"></tbody>
@@ -174,7 +167,15 @@
                         <p class="text-sm text-green-600 font-bold" id="welcomeUserText">...</p>
                     </div>
                 </div>
-                <button onclick="logout()" class="text-red-400 hover:text-red-600 ml-2"><i class="fa-solid fa-power-off text-lg"></i></button>
+                <div class="flex items-center space-x-2">
+                    <!-- Assigned Task Button -->
+                    <button onclick="toggleAssignedModal()" class="relative bg-gray-100 hover:bg-blue-50 text-primary p-2 rounded-lg transition mr-2">
+                        <i class="fa-solid fa-bell text-xl"></i>
+                        <span id="assignedCountBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
+                        <span class="text-xs font-bold ml-1 hidden md:inline">Assigned</span>
+                    </button>
+                    <button onclick="logout()" class="text-red-400 hover:text-red-600 ml-2"><i class="fa-solid fa-power-off text-lg"></i></button>
+                </div>
             </div>
         </header>
 
@@ -191,17 +192,7 @@
                     <div id="mainSearchResult" class="mt-6 hidden max-w-2xl mx-auto"></div>
                 </div>
 
-                <!-- 2. Accept Task Area (New) -->
-                <div id="acceptTaskSection" class="max-w-5xl mx-auto mt-8 hidden">
-                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-primary pl-3 mb-4">
-                        <i class="fa-solid fa-inbox text-primary mr-2"></i> Assigned Tasks (Pending)
-                    </h3>
-                    <div id="acceptTaskList" class="space-y-3">
-                        <!-- Tasks from Admin -->
-                    </div>
-                </div>
-
-                <!-- 3. Today's Task -->
+                <!-- 2. Today's Task (Fixed Grid & Delete) -->
                 <div class="max-w-5xl mx-auto mt-8 pb-24">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-bold text-gray-800 border-l-4 border-accent pl-3">Today's Task</h3>
@@ -209,7 +200,8 @@
                             <i class="fa-brands fa-whatsapp mr-1"></i> Share Plan
                         </button>
                     </div>
-                    <div id="todayTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                    <!-- Added auto-rows to allow unlimited tasks -->
+                    <div id="todayTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr"></div>
                 </div>
 
                 <!-- Write Report Btn -->
@@ -225,7 +217,7 @@
                 <i class="fa-solid fa-chevron-left text-xl pointer-events-none"></i>
             </button>
 
-            <!-- Sidebar (Enhanced) -->
+            <!-- Sidebar -->
             <div id="taskSidebar" class="sidebar sidebar-closed fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-40 flex flex-col">
                 <div class="p-4 bg-primary text-white flex justify-between items-center">
                     <h3 class="font-bold">Select Customers</h3>
@@ -244,16 +236,21 @@
         </div>
     </div>
 
-    <!-- Edit Report Modal (Admin) -->
-    <div id="editReportModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center">
-        <div class="bg-white p-6 rounded shadow-lg w-96">
-            <h3 class="font-bold text-lg mb-4">Modify Data</h3>
-            <input type="hidden" id="editReportId">
-            <label class="text-xs text-gray-500 block mb-1">Outcome Note</label>
-            <textarea id="editReportNote" class="w-full border p-2 rounded h-24"></textarea>
-            <div class="mt-4 flex justify-end space-x-2">
-                <button onclick="document.getElementById('editReportModal').classList.add('hidden')" class="text-gray-500 px-3">Cancel</button>
-                <button onclick="saveEditedReport()" class="bg-primary text-white px-4 py-2 rounded">Save Changes</button>
+    <!-- Assigned Tasks Modal (New Separate Page) -->
+    <div id="assignedTaskModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white w-full max-w-2xl h-3/4 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
+            <div class="p-4 bg-primary text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-bell mr-2"></i>Assigned Tasks</h3>
+                <button onclick="toggleAssignedModal()" class="hover:text-red-200"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
+                <div id="acceptTaskList" class="space-y-3">
+                    <!-- Tasks injected here -->
+                </div>
+                <div id="noAssignedTasksMsg" class="hidden text-center text-gray-400 mt-10">
+                    <i class="fa-solid fa-clipboard-check text-4xl mb-2"></i>
+                    <p>No pending tasks assigned.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -280,13 +277,13 @@
     </div>
 
     <script>
-        // --- Configuration & Globals ---
+        // --- Globals ---
         let allSalesData = [];
         let myCustomers = [];
-        let currentUser = null; // { code, name, isAdmin }
+        let currentUser = null; 
         let todayTasks = [];
-        let globalHistory = []; // Sales: his history; Admin: all history
-        let adminTasks = []; // Shared task list
+        let globalHistory = []; 
+        let adminTasks = []; 
 
         const repDirectory = {
             "10543": "Beny", "10882": "Prince", "10989": "Abigail", "11006": "Hilda", "11029": "Linda"
@@ -295,7 +292,19 @@
         window.onload = function() {
             loadCSV();
             initDraggable();
+            checkSession(); // Check if user already logged in (Refresh Fix)
         };
+
+        // --- Session Persistence (Fix Refresh) ---
+        function checkSession() {
+            const saved = sessionStorage.getItem('salesMasterUser');
+            if(saved) {
+                const user = JSON.parse(saved);
+                document.getElementById('loginRepCode').value = user.code === 'admin' ? 'admin' : user.code;
+                document.getElementById('loginPassword').value = user.code === 'admin' ? '8888' : '0000';
+                performLogin(); // Auto login
+            }
+        }
 
         // --- Draggable ---
         function initDraggable() {
@@ -321,12 +330,11 @@
                         phone: (item.Phone || item.phone || "").trim(),
                         credit: (item.Credit || item.credit || "0").trim()
                     }));
-                    initAdminRepSelect();
                 }
             });
         }
 
-        async function handleLogin() {
+        async function performLogin() {
             const code = document.getElementById('loginRepCode').value.trim();
             const pass = document.getElementById('loginPassword').value.trim();
             const status = document.getElementById('loginStatus');
@@ -334,11 +342,15 @@
             // 1. Admin Login
             if (code.toLowerCase() === 'admin' && pass === '8888') {
                 currentUser = { code: 'admin', name: 'Administrator', isAdmin: true };
+                sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); // Save Session
+                
                 document.getElementById('globalLoader').classList.remove('hidden');
                 await loadAllDataForAdmin();
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('adminSection').classList.remove('hidden');
                 document.getElementById('globalLoader').classList.add('hidden');
+                
+                addAssignRow(); // Init first row
                 renderAdminTasks();
                 return;
             }
@@ -351,11 +363,12 @@
             myCustomers = customers;
             let finalName = repDirectory[code] || customers[0].csvRepName;
             currentUser = { code: code, name: finalName, isAdmin: false };
+            sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); // Save Session
             
             document.getElementById('globalLoader').classList.remove('hidden');
             try {
                 await loadTasksFromCloud(); // Today's plan
-                await loadHistoryFromCloud(); // Reports (for sidebar stats)
+                await loadHistoryFromCloud(); // Reports
                 await loadAssignedTasksForRep(); // Tasks assigned by admin
 
                 document.getElementById('loginSection').classList.add('hidden');
@@ -363,26 +376,22 @@
                 document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`;
                 document.getElementById('globalLoader').classList.add('hidden');
                 
-                applySidebarFilter(); // Render sidebar with stats
+                applySidebarFilter();
                 renderTasks();
-                renderAcceptTasks();
+                updateAssignedBadge();
             } catch (e) { console.error(e); status.innerText="Cloud connection failed"; status.classList.remove('hidden'); document.getElementById('globalLoader').classList.add('hidden'); }
         }
         
-        function logout() { location.reload(); }
+        function logout() { sessionStorage.removeItem('salesMasterUser'); location.reload(); }
 
         // ================= ADMIN FUNCTIONS =================
 
         async function loadAllDataForAdmin() {
-            // Get Admin Tasks
             const taskSnap = await db.collection('admin_tasks').orderBy('timestamp', 'desc').get();
-            adminTasks = [];
-            taskSnap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
+            adminTasks = []; taskSnap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
 
-            // Get All Reports
             const repSnap = await db.collection('reports').orderBy('timestamp', 'desc').get();
-            globalHistory = [];
-            repSnap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
+            globalHistory = []; repSnap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
         }
 
         function switchAdminTab(tab) {
@@ -395,60 +404,93 @@
             if(tab === 'reports') renderAdminReports();
         }
 
-        function initAdminRepSelect() {
-            const sel = document.getElementById('adminAssignRep');
-            sel.innerHTML = '<option value="">Select Rep...</option>';
-            for (const [code, name] of Object.entries(repDirectory)) {
-                sel.innerHTML += `<option value="${code}">${name} (${code})</option>`;
-            }
+        // --- Admin Bulk Assign ---
+        function addAssignRow() {
+            const container = document.getElementById('assignRowsContainer');
+            const rowId = Date.now() + Math.random();
+            const div = document.createElement('div');
+            div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative";
+            
+            // Build Rep Options
+            let repOptions = '<option value="">Select Rep...</option>';
+            for (const [code, name] of Object.entries(repDirectory)) repOptions += `<option value="${code}">${name} (${code})</option>`;
+
+            div.innerHTML = `
+                <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">X</button>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500">SALES REP</label>
+                    <select class="assign-rep w-full p-2 border rounded text-sm bg-white">${repOptions}</select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500">CUSTOMER</label>
+                    <div class="relative">
+                        <input type="text" placeholder="Search..." class="w-full p-2 border rounded text-sm" onkeyup="searchAdminCustInRow(this, '${rowId}')">
+                        <div id="res-${rowId}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div>
+                        <input type="hidden" class="assign-cust-id">
+                        <input type="hidden" class="assign-cust-name">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500">INSTRUCTION</label>
+                    <input type="text" class="assign-note w-full p-2 border rounded text-sm" placeholder="Task details...">
+                </div>
+            `;
+            container.appendChild(div);
         }
 
-        function searchAdminCust(inp) {
+        function searchAdminCustInRow(inp, rowId) {
             const val = inp.value.toLowerCase();
-            const box = document.getElementById('adminCustResults');
+            const box = document.getElementById(`res-${rowId}`);
             if(val.length<2) { box.classList.add('hidden'); return; }
             box.innerHTML = ''; box.classList.remove('hidden');
             allSalesData.filter(c => c.name.toLowerCase().includes(val) || c.id.toLowerCase().includes(val)).slice(0,10).forEach(c => {
-                const d = document.createElement('div');
-                d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm";
+                const d = document.createElement('div'); d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm";
                 d.innerText = `${c.name} (${c.id}) - ${c.repCode}`;
                 d.onclick = () => {
                     inp.value = c.name;
-                    document.getElementById('adminAssignCustId').value = c.id;
-                    document.getElementById('adminAssignCustName').value = c.name;
+                    inp.parentElement.querySelector('.assign-cust-id').value = c.id;
+                    inp.parentElement.querySelector('.assign-cust-name').value = c.name;
                     box.classList.add('hidden');
                 }
                 box.appendChild(d);
             });
         }
 
-        async function adminSubmitTask() {
-            const repCode = document.getElementById('adminAssignRep').value;
-            const custId = document.getElementById('adminAssignCustId').value;
-            const custName = document.getElementById('adminAssignCustName').value;
-            const note = document.getElementById('adminAssignNote').value;
+        async function adminSubmitBulkTasks() {
+            const rows = document.querySelectorAll('.assign-row');
+            const batch = db.batch();
+            let count = 0;
+            let localUpdates = [];
 
-            if(!repCode || !custId || !note) return alert("Please fill all fields");
+            rows.forEach(row => {
+                const repCode = row.querySelector('.assign-rep').value;
+                const custId = row.querySelector('.assign-cust-id').value;
+                const custName = row.querySelector('.assign-cust-name').value;
+                const note = row.querySelector('.assign-note').value;
 
-            const newTask = {
-                repCode: repCode,
-                repName: repDirectory[repCode] || repCode,
-                customerId: custId,
-                customerName: custName,
-                taskDetail: note,
-                status: 'pending', // pending, completed
-                assignedDate: new Date().toLocaleDateString(),
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            };
+                if(repCode && custId && note) {
+                    const ref = db.collection('admin_tasks').doc();
+                    const task = {
+                        repCode: repCode, repName: repDirectory[repCode] || repCode,
+                        customerId: custId, customerName: custName, taskDetail: note,
+                        status: 'pending', assignedDate: new Date().toLocaleDateString(),
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    batch.set(ref, task);
+                    localUpdates.push({ docId: ref.id, ...task });
+                    count++;
+                }
+            });
 
-            const ref = await db.collection('admin_tasks').add(newTask);
-            adminTasks.unshift({ docId: ref.id, ...newTask }); // Update local
-            
-            alert("Task Assigned!");
-            document.getElementById('adminAssignNote').value = '';
-            document.getElementById('adminAssignCustSearch').value = '';
+            if(count === 0) return alert("Please fill at least one complete row.");
+            await batch.commit();
+            adminTasks = localUpdates.concat(adminTasks); // Updates history view
+            alert(`${count} tasks assigned successfully!`);
+            document.getElementById('assignRowsContainer').innerHTML = '';
+            addAssignRow(); // Reset
         }
 
+        // --- Admin History & Export ---
         function renderAdminTasks() {
             const filter = document.getElementById('adminTaskFilter').value.toLowerCase();
             const container = document.getElementById('adminTaskList');
@@ -473,6 +515,17 @@
             });
         }
 
+        function adminExportTasks() {
+            let csv = "AssignedDate,RepName,Customer,TaskDetail,Status\n";
+            adminTasks.forEach(t => {
+                csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`;
+            });
+            const link = document.createElement("a");
+            link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
+            link.download = `Assigned_Tasks_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link); link.click();
+        }
+
         async function adminRestoreTask(docId) {
             if(!confirm("Restore this task to Pending?")) return;
             await db.collection('admin_tasks').doc(docId).update({ status: 'pending' });
@@ -481,6 +534,7 @@
             renderAdminTasks();
         }
 
+        // --- Admin Reports (No Action) ---
         function renderAdminReports() {
             const filter = document.getElementById('adminReportFilter').value.toLowerCase();
             const tbody = document.getElementById('adminReportTableBody');
@@ -488,44 +542,16 @@
             
             globalHistory.filter(r => 
                 r.repCode.toLowerCase().includes(filter) || 
-                (r.customerName && r.customerName.toLowerCase().includes(filter)) ||
-                new Date(r.date).toLocaleDateString().includes(filter)
+                (r.customerName && r.customerName.toLowerCase().includes(filter))
             ).forEach(r => {
                 const dateStr = new Date(r.date).toLocaleDateString();
                 const tr = document.createElement('tr');
                 tr.className = "border-b hover:bg-gray-50";
-                tr.innerHTML = `
-                    <td class="p-3">${dateStr}</td>
-                    <td class="p-3 font-bold">${repDirectory[r.repCode] || r.repCode}</td>
-                    <td class="p-3">${r.customerName}</td>
-                    <td class="p-3 text-gray-600">${r.note}</td>
-                    <td class="p-3 text-center">
-                        <button onclick="openEditReport('${r.docId}', '${r.note.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fa-solid fa-pen"></i></button>
-                    </td>
-                `;
+                tr.innerHTML = `<td class="p-3">${dateStr}</td><td class="p-3 font-bold">${repDirectory[r.repCode] || r.repCode}</td><td class="p-3">${r.customerName}</td><td class="p-3 text-gray-600">${r.note}</td>`;
                 tbody.appendChild(tr);
             });
         }
-
-        function openEditReport(docId, note) {
-            document.getElementById('editReportId').value = docId;
-            document.getElementById('editReportNote').value = note;
-            document.getElementById('editReportModal').classList.remove('hidden');
-        }
-
-        async function saveEditedReport() {
-            const id = document.getElementById('editReportId').value;
-            const newNote = document.getElementById('editReportNote').value;
-            await db.collection('reports').doc(id).update({ note: newNote });
-            
-            // Update local
-            const rep = globalHistory.find(r => r.docId === id);
-            if(rep) rep.note = newNote;
-            
-            document.getElementById('editReportModal').classList.add('hidden');
-            renderAdminReports();
-        }
-
+        
         function adminExportReports() {
             let csv = "Date,RepName,Customer,Note\n";
             globalHistory.forEach(r => {
@@ -534,135 +560,97 @@
             });
             const link = document.createElement("a");
             link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
-            link.download = `All_Reports_${new Date().toISOString().slice(0,10)}.csv`;
+            link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`;
             document.body.appendChild(link); link.click();
         }
 
         // ================= SALES REP FUNCTIONS =================
 
-        // 1. Sidebar Stats & Filters
         function getCustomerStats(custId) {
             const now = new Date();
             const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay() + 1); startOfWeek.setHours(0,0,0,0);
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
             let week = 0, month = 0;
-            globalHistory.forEach(h => {
-                if (h.customerId === custId) {
-                    const d = new Date(h.date);
-                    if (d >= startOfWeek) week++;
-                    if (d >= startOfMonth) month++;
-                }
-            });
+            globalHistory.forEach(h => { if (h.customerId === custId) { const d = new Date(h.date); if (d >= startOfWeek) week++; if (d >= startOfMonth) month++; } });
             return { week, month };
         }
 
         function applySidebarFilter() {
             const mode = document.getElementById('sidebarFilterMode').value;
             const q = document.querySelector('#taskSidebar input').value.toLowerCase();
-            
             let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q));
             
-            if (mode === 'missed_week') {
-                filtered = filtered.filter(c => getCustomerStats(c.id).week === 0);
-            } else if (mode === 'missed_month') {
-                filtered = filtered.filter(c => getCustomerStats(c.id).month === 0);
-            }
+            if (mode === 'missed_week') filtered = filtered.filter(c => getCustomerStats(c.id).week === 0);
+            else if (mode === 'missed_month') filtered = filtered.filter(c => getCustomerStats(c.id).month === 0);
             
-            const list = document.getElementById('customerSidebarList');
-            list.innerHTML = '';
+            const list = document.getElementById('customerSidebarList'); list.innerHTML = '';
             filtered.slice(0, 100).forEach(c => {
                 const stats = getCustomerStats(c.id);
                 const item = document.createElement('div');
                 item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer";
-                item.innerHTML = `
-                    <div>
-                        <div class="font-bold text-gray-700 text-sm">${c.name}</div>
-                        <div class="text-xs text-gray-400">${c.id}</div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <div class="text-[10px] text-gray-500 text-right mr-2">
-                            <div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div>
-                            <div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div>
-                        </div>
-                        <button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500"><i class="fa-solid fa-plus-circle text-xl"></i></button>
-                    </div>`;
+                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div>
+                    <div class="flex items-center space-x-2"><div class="text-[10px] text-gray-500 text-right mr-2"><div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div><div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div></div><button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500"><i class="fa-solid fa-plus-circle text-xl"></i></button></div>`;
                 list.appendChild(item);
             });
         }
-        function filterSidebarList(val) { applySidebarFilter(); } // Re-trigger filter
+        function filterSidebarList(val) { applySidebarFilter(); }
 
-        // 2. Accept Task Logic
+        // --- Assigned Tasks (Separate Modal) ---
         async function loadAssignedTasksForRep() {
-            const snap = await db.collection('admin_tasks')
-                                 .where('repCode', '==', currentUser.code)
-                                 .where('status', '==', 'pending')
-                                 .get();
-            adminTasks = [];
-            snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
+            const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get();
+            adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
+        }
+
+        function toggleAssignedModal() {
+            const modal = document.getElementById('assignedTaskModal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                renderAcceptTasks();
+            } else { modal.classList.add('hidden'); }
         }
 
         function renderAcceptTasks() {
             const container = document.getElementById('acceptTaskList');
-            const section = document.getElementById('acceptTaskSection');
-            
-            if (adminTasks.length === 0) {
-                section.classList.add('hidden');
-                return;
-            }
-            section.classList.remove('hidden');
+            const noMsg = document.getElementById('noAssignedTasksMsg');
             container.innerHTML = '';
+            
+            if (adminTasks.length === 0) { noMsg.classList.remove('hidden'); return; }
+            noMsg.classList.add('hidden');
 
             adminTasks.forEach(t => {
                 const div = document.createElement('div');
                 div.id = `accept-${t.docId}`;
                 div.className = "bg-white p-4 rounded shadow border-l-4 border-primary flex justify-between items-center animate-fade-in";
-                div.innerHTML = `
-                    <div>
-                        <div class="font-bold text-gray-800">${t.customerName} <span class="text-xs bg-gray-200 px-1 rounded">${t.customerId}</span></div>
-                        <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-user-tag mr-1"></i> Admin Task: ${t.taskDetail}</div>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-8 h-8 rounded-full hover:bg-green-200 text-green-600 shadow" title="Add to Today's Plan">
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
-                        <button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-8 h-8 rounded-full hover:bg-blue-800 text-white shadow" title="Mark Completed">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
-                    </div>
-                `;
+                div.innerHTML = `<div><div class="font-bold text-gray-800">${t.customerName} <span class="text-xs bg-gray-200 px-1 rounded">${t.customerId}</span></div><div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-user-tag mr-1"></i> ${t.taskDetail}</div></div>
+                    <div class="flex space-x-3"><button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-10 h-10 rounded-full hover:bg-green-200 text-green-600 shadow" title="Add to Today"><i class="fa-solid fa-plus"></i></button><button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-10 h-10 rounded-full hover:bg-blue-800 text-white shadow" title="Mark Done"><i class="fa-solid fa-check"></i></button></div>`;
                 container.appendChild(div);
             });
+        }
+        
+        function updateAssignedBadge() {
+            const badge = document.getElementById('assignedCountBadge');
+            if(adminTasks.length > 0) { badge.innerText = adminTasks.length; badge.classList.remove('hidden'); } 
+            else { badge.classList.add('hidden'); }
         }
 
         function addTaskToToday(docId, custId) {
             addToTask(custId);
-            // Visual feedback
             const btn = document.querySelector(`#accept-${docId} button`);
             if(btn) btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>';
         }
 
         async function completeAssignedTask(docId) {
-            if(!confirm("Mark this task as completed? It will be removed from your list.")) return;
-            
-            // Update Firestore
+            if(!confirm("Mark this task as completed?")) return;
             await db.collection('admin_tasks').doc(docId).update({ status: 'completed', completedDate: new Date().toISOString() });
-            
-            // Animate and remove
-            const el = document.getElementById(`accept-${docId}`);
-            el.classList.add('task-fade-out');
-            setTimeout(() => {
-                adminTasks = adminTasks.filter(t => t.docId !== docId);
-                renderAcceptTasks();
-            }, 500);
+            const el = document.getElementById(`accept-${docId}`); el.classList.add('task-fade-out');
+            setTimeout(() => { adminTasks = adminTasks.filter(t => t.docId !== docId); renderAcceptTasks(); updateAssignedBadge(); }, 500);
         }
 
-        // --- Core Sales Logic (Same as before, modified for cloud) ---
+        // --- Today's Task (Fixes) ---
         async function loadTasksFromCloud() {
             const doc = await db.collection('daily_tasks').doc(currentUser.code).get();
-            if (doc.exists && doc.data().date === new Date().toLocaleDateString()) {
-                todayTasks = doc.data().tasks || [];
-            } else { todayTasks = []; }
+            if (doc.exists && doc.data().date === new Date().toLocaleDateString()) { todayTasks = doc.data().tasks || []; } 
+            else { todayTasks = []; }
         }
 
         async function saveTasksToCloud() {
@@ -671,10 +659,8 @@
         }
 
         async function loadHistoryFromCloud() {
-            // Load ONLY this rep's history for sidebar stats
             const snap = await db.collection('reports').where('repCode', '==', currentUser.code).get();
-            globalHistory = [];
-            snap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
+            globalHistory = []; snap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
         }
 
         function handleMainSearch(query) {
@@ -682,9 +668,8 @@
             if (query.length < 2) { container.classList.add('hidden'); return; }
             const res = myCustomers.find(c => c.name.toLowerCase().includes(query.toLowerCase()) || c.id.toLowerCase().includes(query.toLowerCase()));
             container.classList.remove('hidden');
-            if (res) {
-                container.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col md:flex-row justify-between items-center"><div class="mb-4 md:mb-0 text-left"><h3 class="text-xl font-bold text-primary">${res.name}</h3><div class="text-sm text-gray-500 mt-2 space-y-1"><div><i class="fa-solid fa-id-badge mr-2 w-5"></i> ${res.id}</div><div><a href="tel:${res.phone}" class="text-blue-600 hover:underline font-bold"><i class="fa-solid fa-phone mr-2 w-5"></i> ${res.phone}</a></div><div><i class="fa-solid fa-wallet mr-2 w-5"></i> Limit: ${res.credit}</div></div></div><button onclick="window.open('https://wa.me/233550584720?text=${encodeURIComponent(`I want statement of ${res.name} (${res.id})`)}', '_blank')" class="bg-green-100 text-green-700 px-5 py-2 rounded-lg font-bold hover:bg-green-200 transition"><i class="fa-brands fa-whatsapp mr-2"></i> Statement</button></div>`;
-            } else { container.innerHTML = `<div class="bg-white p-4 rounded-xl text-center text-gray-400">Not Found</div>`; }
+            if (res) { container.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col md:flex-row justify-between items-center"><div class="mb-4 md:mb-0 text-left"><h3 class="text-xl font-bold text-primary">${res.name}</h3><div class="text-sm text-gray-500 mt-2 space-y-1"><div><i class="fa-solid fa-id-badge mr-2 w-5"></i> ${res.id}</div><div><a href="tel:${res.phone}" class="text-blue-600 hover:underline font-bold"><i class="fa-solid fa-phone mr-2 w-5"></i> ${res.phone}</a></div><div><i class="fa-solid fa-wallet mr-2 w-5"></i> Limit: ${res.credit}</div></div></div><button onclick="window.open('https://wa.me/233550584720?text=${encodeURIComponent(`I want statement of ${res.name} (${res.id})`)}', '_blank')" class="bg-green-100 text-green-700 px-5 py-2 rounded-lg font-bold hover:bg-green-200 transition"><i class="fa-brands fa-whatsapp mr-2"></i> Statement</button></div>`; } 
+            else { container.innerHTML = `<div class="bg-white p-4 rounded-xl text-center text-gray-400">Not Found</div>`; }
         }
 
         function toggleSidebar() { const sb = document.getElementById('taskSidebar'); sb.classList.toggle('sidebar-closed'); sb.classList.toggle('sidebar-open'); }
@@ -695,13 +680,19 @@
                 saveTasksToCloud(); renderTasks();
             }
         }
-        function removeFromTask(id) { todayTasks = todayTasks.filter(t => t.id !== id); saveTasksToCloud(); renderTasks(); }
+        
+        // Fixed Delete Function (Global Scope)
+        window.removeFromTask = function(id) {
+            todayTasks = todayTasks.filter(t => t.id !== id);
+            saveTasksToCloud();
+            renderTasks();
+        }
 
         function renderTasks() {
             const box = document.getElementById('todayTaskList'); box.innerHTML = '';
             todayTasks.forEach(t => {
                 const card = document.createElement('div'); card.className = "bg-white p-4 rounded-lg shadow-sm border relative group";
-                card.innerHTML = `<h4 class="font-bold text-gray-800">${t.name}</h4><a href="tel:${t.phone}" class="text-xs text-blue-500 hover:underline block my-1"><i class="fa-solid fa-phone"></i> ${t.phone}</a><button onclick="removeFromTask('${t.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>`;
+                card.innerHTML = `<h4 class="font-bold text-gray-800">${t.name}</h4><a href="tel:${t.phone}" class="text-xs text-blue-500 hover:underline block my-1"><i class="fa-solid fa-phone"></i> ${t.phone}</a><button onclick="removeFromTask('${t.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-2"><i class="fa-solid fa-trash"></i></button>`;
                 box.appendChild(card);
             });
         }
@@ -755,8 +746,8 @@
                 const batch = db.batch();
                 historyBatch.forEach(r => { const ref = db.collection('reports').doc(); batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); });
                 await batch.commit();
-                globalHistory = globalHistory.concat(historyBatch); // Update local stats immediately
-                applySidebarFilter(); // Refresh sidebar stats
+                globalHistory = globalHistory.concat(historyBatch); 
+                applySidebarFilter(); 
                 window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
                 closeReportModal();
             } catch(e) { alert("Failed to save to cloud."); console.error(e); }
