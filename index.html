@@ -3,16 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 7.1</title>
-    <!-- PWA 配置 -->
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" href="icon.png">
-
-<!-- iOS 专用配置 (让 iPhone 也能全屏) -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SalesMaster">
-<link rel="apple-touch-icon" href="icon.png">
+    <title>Sales Master Pro 7.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -109,7 +100,7 @@
         </header>
 
         <main class="flex-1 overflow-y-auto p-4 bg-gray-100">
-            <!-- 1. Assign Task Tab (Bulk) -->
+            <!-- 1. Assign Task Tab (Bulk Multi-Select) -->
             <div id="adminTabAssign" class="max-w-4xl mx-auto space-y-4">
                 <div class="bg-white p-4 rounded-lg shadow">
                     <div class="flex justify-between items-center mb-4 border-b pb-2">
@@ -201,7 +192,7 @@
                     <div id="mainSearchResult" class="mt-6 hidden max-w-2xl mx-auto"></div>
                 </div>
 
-                <!-- 2. Today's Task (Fixed Grid & Delete) -->
+                <!-- 2. Today's Task -->
                 <div class="max-w-5xl mx-auto mt-8 pb-24">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-bold text-gray-800 border-l-4 border-accent pl-3">Today's Task</h3>
@@ -209,7 +200,6 @@
                             <i class="fa-brands fa-whatsapp mr-1"></i> Share Plan
                         </button>
                     </div>
-                    <!-- Added auto-rows to allow unlimited tasks -->
                     <div id="todayTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr"></div>
                 </div>
 
@@ -245,7 +235,7 @@
         </div>
     </div>
 
-    <!-- Assigned Tasks Modal (New Separate Page) -->
+    <!-- Assigned Tasks Modal -->
     <div id="assignedTaskModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white w-full max-w-2xl h-3/4 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
             <div class="p-4 bg-primary text-white flex justify-between items-center">
@@ -253,9 +243,7 @@
                 <button onclick="toggleAssignedModal()" class="hover:text-red-200"><i class="fa-solid fa-times text-xl"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
-                <div id="acceptTaskList" class="space-y-3">
-                    <!-- Tasks injected here -->
-                </div>
+                <div id="acceptTaskList" class="space-y-3"></div>
                 <div id="noAssignedTasksMsg" class="hidden text-center text-gray-400 mt-10">
                     <i class="fa-solid fa-clipboard-check text-4xl mb-2"></i>
                     <p>No pending tasks assigned.</p>
@@ -264,7 +252,7 @@
         </div>
     </div>
 
-    <!-- Report Modal (Sales) -->
+    <!-- Report Modal -->
     <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white w-full max-w-4xl h-5/6 rounded-xl shadow-2xl flex flex-col overflow-hidden">
             <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
@@ -299,19 +287,18 @@
         };
 
         window.onload = function() {
-            // FIX: checkSession is now called ONLY after CSV is fully loaded
             loadCSV();
             initDraggable();
         };
 
-        // --- Session Persistence (Fix Refresh) ---
+        // --- Session Persistence ---
         function checkSession() {
             const saved = sessionStorage.getItem('salesMasterUser');
             if(saved) {
                 const user = JSON.parse(saved);
                 document.getElementById('loginRepCode').value = user.code === 'admin' ? 'admin' : user.code;
                 document.getElementById('loginPassword').value = user.code === 'admin' ? '8888' : '0000';
-                performLogin(); // Auto login
+                performLogin(); 
             }
         }
 
@@ -339,8 +326,7 @@
                         phone: (item.Phone || item.phone || "").trim(),
                         credit: (item.Credit || item.credit || "0").trim()
                     }));
-                    // ★★★ CRITICAL FIX: Only check session AFTER data is loaded
-                    checkSession();
+                    checkSession(); // Check session AFTER data load
                 }
             });
         }
@@ -353,7 +339,7 @@
             // 1. Admin Login
             if (code.toLowerCase() === 'admin' && pass === '8888') {
                 currentUser = { code: 'admin', name: 'Administrator', isAdmin: true };
-                sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); // Save Session
+                sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
                 
                 document.getElementById('globalLoader').classList.remove('hidden');
                 await loadAllDataForAdmin();
@@ -361,7 +347,7 @@
                 document.getElementById('adminSection').classList.remove('hidden');
                 document.getElementById('globalLoader').classList.add('hidden');
                 
-                addAssignRow(); // Init first row
+                addAssignRow(); 
                 renderAdminTasks();
                 return;
             }
@@ -369,11 +355,7 @@
             // 2. Sales Login
             if (pass !== '0000') { status.innerText = "Wrong Password"; status.classList.remove('hidden'); return; }
             const customers = allSalesData.filter(c => c.repCode == code);
-            
-            // Fix: If CSV isn't ready yet, customers might be empty even if code is valid.
-            // But since we moved checkSession to inside loadCSV, this should be safe now.
             if (customers.length === 0) { 
-                // Only show error if it's a manual login attempt (not auto)
                 if(document.activeElement.id === 'loginRepCode' || document.activeElement.id === 'loginPassword') {
                     status.innerText = "Code not found"; status.classList.remove('hidden'); 
                 }
@@ -383,13 +365,13 @@
             myCustomers = customers;
             let finalName = repDirectory[code] || customers[0].csvRepName;
             currentUser = { code: code, name: finalName, isAdmin: false };
-            sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); // Save Session
+            sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
             
             document.getElementById('globalLoader').classList.remove('hidden');
             try {
-                await loadTasksFromCloud(); // Today's plan
-                await loadHistoryFromCloud(); // Reports
-                await loadAssignedTasksForRep(); // Tasks assigned by admin
+                await loadTasksFromCloud(); 
+                await loadHistoryFromCloud(); 
+                await loadAssignedTasksForRep(); 
 
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('appSection').classList.remove('hidden');
@@ -424,21 +406,30 @@
             if(tab === 'reports') renderAdminReports();
         }
 
-        // --- Admin Bulk Assign ---
+        // --- Admin Bulk Assign (Multi Select Update) ---
         function addAssignRow() {
             const container = document.getElementById('assignRowsContainer');
             const rowId = Date.now() + Math.random();
             const div = document.createElement('div');
             div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative";
             
-            let repOptions = '<option value="">Select Rep...</option>';
-            for (const [code, name] of Object.entries(repDirectory)) repOptions += `<option value="${code}">${name} (${code})</option>`;
+            // Build Checkbox List for Reps
+            let repCheckboxes = '<div class="h-24 overflow-y-auto border rounded p-2 bg-white">';
+            for (const [code, name] of Object.entries(repDirectory)) {
+                repCheckboxes += `
+                    <label class="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                        <input type="checkbox" value="${code}" class="assign-rep-checkbox accent-primary">
+                        <span class="text-xs text-gray-700 font-bold">${name}</span>
+                    </label>
+                `;
+            }
+            repCheckboxes += '</div>';
 
             div.innerHTML = `
                 <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">X</button>
                 <div>
-                    <label class="text-[10px] font-bold text-gray-500">SALES REP</label>
-                    <select class="assign-rep w-full p-2 border rounded text-sm bg-white">${repOptions}</select>
+                    <label class="text-[10px] font-bold text-gray-500">SELECT SALES REPS (Multi)</label>
+                    ${repCheckboxes}
                 </div>
                 <div>
                     <label class="text-[10px] font-bold text-gray-500">CUSTOMER</label>
@@ -482,31 +473,40 @@
             let localUpdates = [];
 
             rows.forEach(row => {
-                const repCode = row.querySelector('.assign-rep').value;
+                // Get all checked boxes in this row
+                const selectedCheckboxes = row.querySelectorAll('.assign-rep-checkbox:checked');
                 const custId = row.querySelector('.assign-cust-id').value;
                 const custName = row.querySelector('.assign-cust-name').value;
                 const note = row.querySelector('.assign-note').value;
 
-                if(repCode && custId && note) {
-                    const ref = db.collection('admin_tasks').doc();
-                    const task = {
-                        repCode: repCode, repName: repDirectory[repCode] || repCode,
-                        customerId: custId, customerName: custName, taskDetail: note,
-                        status: 'pending', assignedDate: new Date().toLocaleDateString(),
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    };
-                    batch.set(ref, task);
-                    localUpdates.push({ docId: ref.id, ...task });
-                    count++;
+                if(selectedCheckboxes.length > 0 && custId && note) {
+                    // Loop through each selected rep and create a task
+                    selectedCheckboxes.forEach(cb => {
+                        const repCode = cb.value;
+                        const ref = db.collection('admin_tasks').doc();
+                        const task = {
+                            repCode: repCode, 
+                            repName: repDirectory[repCode] || repCode,
+                            customerId: custId, 
+                            customerName: custName, 
+                            taskDetail: note,
+                            status: 'pending', 
+                            assignedDate: new Date().toLocaleDateString(),
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        batch.set(ref, task);
+                        localUpdates.push({ docId: ref.id, ...task });
+                        count++;
+                    });
                 }
             });
 
-            if(count === 0) return alert("Please fill at least one complete row.");
+            if(count === 0) return alert("Please select at least one rep and fill details.");
             await batch.commit();
-            adminTasks = localUpdates.concat(adminTasks); // Updates history view
+            adminTasks = localUpdates.concat(adminTasks); 
             alert(`${count} tasks assigned successfully!`);
             document.getElementById('assignRowsContainer').innerHTML = '';
-            addAssignRow(); // Reset
+            addAssignRow(); 
         }
 
         // --- Admin History & Export ---
@@ -553,7 +553,7 @@
             renderAdminTasks();
         }
 
-        // --- Admin Reports (No Action) ---
+        // --- Admin Reports (Read Only) ---
         function renderAdminReports() {
             const filter = document.getElementById('adminReportFilter').value.toLowerCase();
             const tbody = document.getElementById('adminReportTableBody');
@@ -614,7 +614,7 @@
         }
         function filterSidebarList(val) { applySidebarFilter(); }
 
-        // --- Assigned Tasks (Separate Modal) ---
+        // --- Assigned Tasks ---
         async function loadAssignedTasksForRep() {
             const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get();
             adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
@@ -665,7 +665,7 @@
             setTimeout(() => { adminTasks = adminTasks.filter(t => t.docId !== docId); renderAcceptTasks(); updateAssignedBadge(); }, 500);
         }
 
-        // --- Today's Task (Fixes) ---
+        // --- Today's Task ---
         async function loadTasksFromCloud() {
             const doc = await db.collection('daily_tasks').doc(currentUser.code).get();
             if (doc.exists && doc.data().date === new Date().toLocaleDateString()) { todayTasks = doc.data().tasks || []; } 
@@ -700,7 +700,6 @@
             }
         }
         
-        // Fixed Delete Function (Global Scope)
         window.removeFromTask = function(id) {
             todayTasks = todayTasks.filter(t => t.id !== id);
             saveTasksToCloud();
@@ -770,18 +769,6 @@
                 window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
                 closeReportModal();
             } catch(e) { alert("Failed to save to cloud."); console.error(e); }
-        }
-    </script>
-<!-- PWA Service Worker 注册脚本 -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('./sw.js').then(function(registration) {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                }, function(err) {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
-            });
         }
     </script>
 </body>
