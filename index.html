@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 7.5</title>
+    <title>Sales Master Pro 8.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -49,19 +49,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .task-fade-out { animation: fadeOut 0.5s forwards; }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(20px); height: 0; padding: 0; margin: 0; } }
-        
-        /* 下拉刷新指示器 */
-        .pull-indicator {
-            height: 0;
-            overflow: hidden;
-            transition: height 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f3f4f6;
-            color: #6b7280;
-            font-size: 0.8rem;
-        }
+        .pull-indicator { height: 0; overflow: hidden; transition: height 0.2s; display: flex; align-items: center; justify-content: center; background: #f3f4f6; color: #6b7280; font-size: 0.8rem; }
         .pull-indicator.visible { height: 50px; }
     </style>
 </head>
@@ -142,11 +130,34 @@
                 <div id="adminTaskList" class="space-y-3"></div>
             </div>
 
-            <!-- 3. All Reports Tab (Mobile Optimized) -->
+            <!-- 3. All Reports Tab (升级：多重过滤) -->
             <div id="adminTabReports" class="max-w-6xl mx-auto hidden space-y-4">
-                <div class="flex flex-col md:flex-row justify-between items-center gap-2 mb-4">
-                    <input type="text" id="adminReportFilter" placeholder="Filter reports..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminReports()">
-                    <button onclick="adminExportReports()" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow"><i class="fa-solid fa-file-csv mr-2"></i> Export Monthly Data</button>
+                
+                <!-- 新增：过滤控制栏 -->
+                <div class="bg-white p-4 rounded shadow mb-4">
+                    <div class="flex flex-col md:flex-row gap-3 items-end md:items-center">
+                        <div class="w-full md:w-auto">
+                            <label class="text-[10px] text-gray-500 font-bold block mb-1">DATE</label>
+                            <input type="date" id="adminReportDateFilter" class="w-full p-2 border rounded text-sm bg-gray-50" onchange="renderAdminReports()">
+                        </div>
+                        <div class="w-full md:w-auto">
+                            <label class="text-[10px] text-gray-500 font-bold block mb-1">SALES REP</label>
+                            <select id="adminReportRepFilter" class="w-full p-2 border rounded text-sm bg-gray-50" onchange="renderAdminReports()">
+                                <option value="">All Representatives</option>
+                                <!-- JS populated -->
+                            </select>
+                        </div>
+                        <div class="w-full flex-1">
+                            <label class="text-[10px] text-gray-500 font-bold block mb-1">CUSTOMER NAME</label>
+                            <div class="relative">
+                                <input type="text" id="adminReportTextFilter" placeholder="Type customer name..." class="w-full p-2 pl-8 border rounded text-sm" onkeyup="renderAdminReports()">
+                                <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+                        </div>
+                        <button onclick="adminExportReports()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-bold shadow w-full md:w-auto">
+                            <i class="fa-solid fa-file-csv"></i> Export
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Desktop Table View -->
@@ -164,10 +175,8 @@
                     </table>
                 </div>
 
-                <!-- Mobile Card View (New Feature) -->
-                <div id="adminReportMobileList" class="md:hidden space-y-3">
-                    <!-- Cards will be injected here -->
-                </div>
+                <!-- Mobile Card View -->
+                <div id="adminReportMobileList" class="md:hidden space-y-3"></div>
             </div>
         </main>
     </div>
@@ -189,7 +198,6 @@
                         <span id="assignedCountBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
                         <span class="text-xs font-bold ml-1 hidden md:inline">Assigned</span>
                     </button>
-                    <!-- Sync Button -->
                     <button onclick="refreshData()" class="text-gray-400 hover:text-primary mr-2"><i class="fa-solid fa-rotate"></i></button>
                     <button onclick="logout()" class="text-red-400 hover:text-red-600 ml-2"><i class="fa-solid fa-power-off text-lg"></i></button>
                 </div>
@@ -246,7 +254,7 @@
         </div>
     </div>
 
-    <!-- Assigned Tasks Modal -->
+    <!-- Modals -->
     <div id="assignedTaskModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white w-full max-w-2xl h-3/4 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
             <div class="p-4 bg-primary text-white flex justify-between items-center">
@@ -260,7 +268,6 @@
         </div>
     </div>
 
-    <!-- Report Modal -->
     <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white w-full max-w-4xl h-5/6 rounded-xl shadow-2xl flex flex-col overflow-hidden">
             <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
@@ -298,7 +305,7 @@
             initPullToRefresh('salesMain', 'salesPullIndicator');
         };
 
-        // --- Session (SessionStorage for v7.3 logic) ---
+        // --- Session ---
         function checkSession() {
             const saved = sessionStorage.getItem('salesMasterUser');
             if(saved) {
@@ -309,7 +316,6 @@
             }
         }
 
-        // --- Draggable ---
         function initDraggable() {
             const btn = document.getElementById("draggableBtn");
             let isDragging = false, startY, startTop;
@@ -320,46 +326,13 @@
             btn.onclick = (e) => { if(isDragging)e.preventDefault(); else toggleSidebar(); };
         }
 
-        // --- Pull to Refresh Logic ---
+        // --- Pull to Refresh ---
         function initPullToRefresh(containerId, indicatorId) {
-            const container = document.getElementById(containerId);
-            const indicator = document.getElementById(indicatorId);
-            let startY = 0;
-            let isPulling = false;
-
-            container.addEventListener('touchstart', (e) => {
-                if (container.scrollTop === 0) {
-                    startY = e.touches[0].clientY;
-                    isPulling = true;
-                }
-            });
-
-            container.addEventListener('touchmove', (e) => {
-                if (!isPulling) return;
-                const y = e.touches[0].clientY;
-                const diff = y - startY;
-                if (diff > 0 && diff < 200 && container.scrollTop === 0) {
-                    indicator.style.height = `${diff / 3}px`;
-                }
-            });
-
-            container.addEventListener('touchend', (e) => {
-                if (!isPulling) return;
-                isPulling = false;
-                const endY = e.changedTouches[0].clientY;
-                if (endY - startY > 80 && container.scrollTop === 0) {
-                    indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...';
-                    indicator.style.height = '50px';
-                    refreshData().then(() => {
-                        setTimeout(() => {
-                            indicator.style.height = '0px';
-                            indicator.innerHTML = '<i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh';
-                        }, 500);
-                    });
-                } else {
-                    indicator.style.height = '0px';
-                }
-            });
+            const container = document.getElementById(containerId); const indicator = document.getElementById(indicatorId);
+            let startY = 0; let isPulling = false;
+            container.addEventListener('touchstart', (e) => { if (container.scrollTop === 0) { startY = e.touches[0].clientY; isPulling = true; } });
+            container.addEventListener('touchmove', (e) => { if (!isPulling) return; const y = e.touches[0].clientY; const diff = y - startY; if (diff > 0 && diff < 200 && container.scrollTop === 0) { indicator.style.height = `${diff / 3}px`; } });
+            container.addEventListener('touchend', (e) => { if (!isPulling) return; isPulling = false; const endY = e.changedTouches[0].clientY; if (endY - startY > 80 && container.scrollTop === 0) { indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...'; indicator.style.height = '50px'; refreshData().then(() => { setTimeout(() => { indicator.style.height = '0px'; indicator.innerHTML = '<i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh'; }, 500); }); } else { indicator.style.height = '0px'; } });
         }
 
         async function refreshData() {
@@ -371,22 +344,13 @@
                     renderAdminTasks();
                     renderAdminReports();
                 } else {
-                    await loadTasksFromCloud();
-                    await loadHistoryFromCloud();
-                    await loadAssignedTasksForRep();
-                    applySidebarFilter();
-                    renderTasks();
-                    updateAssignedBadge();
+                    await loadTasksFromCloud(); await loadHistoryFromCloud(); await loadAssignedTasksForRep();
+                    applySidebarFilter(); renderTasks(); updateAssignedBadge();
                 }
-            } catch (e) {
-                console.error("Refresh Error", e);
-                alert("Refresh failed. Check internet.");
-            } finally {
-                document.getElementById('globalLoader').classList.add('hidden');
-            }
+            } catch (e) { console.error("Refresh Error", e); } finally { document.getElementById('globalLoader').classList.add('hidden'); }
         }
 
-        // --- Data Loading ---
+        // --- Data ---
         function loadCSV() {
             Papa.parse("customers.csv", {
                 download: true, header: true, skipEmptyLines: true,
@@ -414,7 +378,7 @@
                 await refreshData();
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('adminSection').classList.remove('hidden');
-                addAssignRow(); 
+                addAssignRow(); initAdminReportFilters(); // Init filters
                 return;
             }
 
@@ -445,37 +409,69 @@
         }
 
         function switchAdminTab(tab) {
-            ['assign','history','reports'].forEach(t => {
-                document.getElementById(`adminTab${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.add('hidden');
-                document.getElementById(`btnTab${t.charAt(0).toUpperCase()+t.slice(1)}`).className = "flex-1 py-3 hover:bg-gray-600 text-gray-300";
-            });
-            document.getElementById(`adminTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.remove('hidden');
-            document.getElementById(`btnTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).className = "flex-1 py-3 hover:bg-gray-600 text-accent font-bold border-b-2 border-accent";
-            if(tab === 'reports') renderAdminReports();
+            ['assign','history','reports'].forEach(t => { document.getElementById(`adminTab${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.add('hidden'); document.getElementById(`btnTab${t.charAt(0).toUpperCase()+t.slice(1)}`).className = "flex-1 py-3 hover:bg-gray-600 text-gray-300"; });
+            document.getElementById(`adminTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.remove('hidden'); document.getElementById(`btnTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).className = "flex-1 py-3 hover:bg-gray-600 text-accent font-bold border-b-2 border-accent";
+            if(tab === 'reports') {
+                initAdminReportFilters();
+                renderAdminReports();
+            }
         }
 
-        // Admin Reports Optimized
+        // --- NEW: Admin Report Filters ---
+        function initAdminReportFilters() {
+            const sel = document.getElementById('adminReportRepFilter');
+            if(sel.options.length > 1) return; // Already inited
+            for (const [code, name] of Object.entries(repDirectory)) {
+                sel.innerHTML += `<option value="${code}">${name} (${code})</option>`;
+            }
+        }
+
         function renderAdminReports() {
-            const filter = document.getElementById('adminReportFilter').value.toLowerCase();
+            const dateVal = document.getElementById('adminReportDateFilter').value;
+            const repVal = document.getElementById('adminReportRepFilter').value;
+            const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase();
+            
             const tbody = document.getElementById('adminReportTableBody');
             const mobileContainer = document.getElementById('adminReportMobileList');
             tbody.innerHTML = '';
             mobileContainer.innerHTML = '';
             
-            globalHistory.filter(r => 
-                r.repCode.toLowerCase().includes(filter) || 
-                (r.customerName && r.customerName.toLowerCase().includes(filter))
-            ).forEach(r => {
+            globalHistory.filter(r => {
+                // 1. Date Check (Simple string match YYYY-MM-DD to ISO comparison)
+                let matchDate = true;
+                if (dateVal) {
+                    const rDate = new Date(r.date);
+                    const filterDate = new Date(dateVal);
+                    // Compare Year, Month, Day
+                    matchDate = (rDate.getFullYear() === filterDate.getFullYear() && 
+                                 rDate.getMonth() === filterDate.getMonth() && 
+                                 rDate.getDate() === filterDate.getDate());
+                }
+
+                // 2. Rep Check
+                let matchRep = true;
+                if (repVal) {
+                    matchRep = (r.repCode === repVal);
+                }
+
+                // 3. Text Check (Customer Name)
+                let matchText = true;
+                if (textVal) {
+                    matchText = (r.customerName && r.customerName.toLowerCase().includes(textVal));
+                }
+
+                return matchDate && matchRep && matchText;
+            }).forEach(r => {
                 const dateStr = new Date(r.date).toLocaleDateString();
                 const repName = repDirectory[r.repCode] || r.repCode;
                 
-                // Desktop View (Table)
+                // Desktop
                 const tr = document.createElement('tr');
                 tr.className = "border-b hover:bg-gray-50";
                 tr.innerHTML = `<td class="p-3">${dateStr}</td><td class="p-3 font-bold">${repName}</td><td class="p-3">${r.customerName}</td><td class="p-3 text-gray-600">${r.note}</td>`;
                 tbody.appendChild(tr);
 
-                // Mobile View (Cards)
+                // Mobile
                 const card = document.createElement('div');
                 card.className = "bg-white p-3 rounded shadow border-l-4 border-gray-500 mb-2";
                 card.innerHTML = `
@@ -492,8 +488,25 @@
 
         function adminExportReports() {
             let csv = "Date,Rep,Customer,Note\n";
-            globalHistory.forEach(r => csv += `${new Date(r.date).toLocaleDateString()},${repDirectory[r.repCode] || r.repCode},${r.customerName},"${r.note}"\n`);
-            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
+            // Re-apply filters for export!
+            const dateVal = document.getElementById('adminReportDateFilter').value;
+            const repVal = document.getElementById('adminReportRepFilter').value;
+            const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase();
+
+            const filteredForExport = globalHistory.filter(r => {
+                let matchDate = true;
+                if (dateVal) {
+                    const rDate = new Date(r.date);
+                    const filterDate = new Date(dateVal);
+                    matchDate = (rDate.getFullYear() === filterDate.getFullYear() && rDate.getMonth() === filterDate.getMonth() && rDate.getDate() === filterDate.getDate());
+                }
+                let matchRep = true; if (repVal) matchRep = (r.repCode === repVal);
+                let matchText = true; if (textVal) matchText = (r.customerName && r.customerName.toLowerCase().includes(textVal));
+                return matchDate && matchRep && matchText;
+            });
+
+            filteredForExport.forEach(r => csv += `${new Date(r.date).toLocaleDateString()},${repDirectory[r.repCode] || r.repCode},${r.customerName},"${r.note}"\n`);
+            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Reports_Filtered_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
         }
 
         // --- Admin Bulk Assign ---
@@ -591,7 +604,6 @@
             const batch = db.batch(); historyBatch.forEach(r => { const ref = db.collection('reports').doc(); batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); });
             batch.commit().catch(e => console.error(e));
             globalHistory = globalHistory.concat(historyBatch); applySidebarFilter();
-            // iOS Optimistic Redirect
             window.location.href = `https://wa.me/?text=${encodeURIComponent(txt)}`;
             closeReportModal();
         }
