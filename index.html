@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 7.3 (iOS Fixed)</title>
+    <title>Sales Master Pro 7.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -14,7 +14,7 @@
 
     <script>
         // ----------------------------------------------------
-        // ★★★ Firebase 配置 (已填入你的信息) ★★★
+        // ★★★ Firebase 配置 ★★★
         // ----------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyCE1Jsq7LPBcJdPcW7DPMAEfxQ6dJHCIb4",
@@ -49,6 +49,20 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .task-fade-out { animation: fadeOut 0.5s forwards; }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(20px); height: 0; padding: 0; margin: 0; } }
+        
+        /* 下拉刷新指示器 */
+        .pull-indicator {
+            height: 0;
+            overflow: hidden;
+            transition: height 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+        .pull-indicator.visible { height: 50px; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans h-screen overflow-hidden flex flex-col">
@@ -81,17 +95,20 @@
         </div>
     </div>
 
-    <!-- B. 管理员界面 (Admin Dashboard) -->
+    <!-- B. 管理员界面 (Admin) -->
     <div id="adminSection" class="flex flex-col h-full hidden">
         <header class="bg-gray-800 text-white shadow-md z-20">
             <div class="container mx-auto px-4 py-3 flex justify-between items-center">
                 <div class="flex items-center space-x-3">
                     <div class="bg-accent text-white w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xl">AD</div>
-                    <h1 class="text-lg font-bold">ADMIN PANEL</h1>
+                    <h1 class="text-lg font-bold">ADMIN</h1>
                 </div>
-                <button onclick="logout()" class="text-red-300 hover:text-white"><i class="fa-solid fa-power-off"></i> Logout</button>
+                <div class="flex items-center space-x-3">
+                    <button onclick="refreshData()" class="text-gray-300 hover:text-white"><i class="fa-solid fa-rotate"></i></button>
+                    <button onclick="logout()" class="text-red-300 hover:text-white"><i class="fa-solid fa-power-off"></i></button>
+                </div>
             </div>
-            <!-- Admin Tabs -->
+            <!-- Tabs -->
             <div class="flex bg-gray-700 text-sm overflow-x-auto">
                 <button onclick="switchAdminTab('assign')" id="btnTabAssign" class="flex-1 py-3 hover:bg-gray-600 text-accent font-bold border-b-2 border-accent">Assign Task</button>
                 <button onclick="switchAdminTab('history')" id="btnTabHistory" class="flex-1 py-3 hover:bg-gray-600 text-gray-300">Task History</button>
@@ -99,25 +116,19 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-4 bg-gray-100">
-            <!-- 1. Assign Task Tab (Bulk Multi-Select) -->
+        <main id="adminMain" class="flex-1 overflow-y-auto p-4 bg-gray-100 relative">
+            <div id="adminPullIndicator" class="pull-indicator"><i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh</div>
+            
+            <!-- 1. Assign Task Tab -->
             <div id="adminTabAssign" class="max-w-4xl mx-auto space-y-4">
                 <div class="bg-white p-4 rounded-lg shadow">
                     <div class="flex justify-between items-center mb-4 border-b pb-2">
                         <h3 class="font-bold text-gray-700">Bulk Task Assignment</h3>
-                        <button onclick="addAssignRow()" class="bg-gray-100 hover:bg-gray-200 text-primary px-3 py-1 rounded text-sm font-bold">
-                            <i class="fa-solid fa-plus mr-1"></i> Add Row
-                        </button>
+                        <button onclick="addAssignRow()" class="bg-gray-100 hover:bg-gray-200 text-primary px-3 py-1 rounded text-sm font-bold"><i class="fa-solid fa-plus mr-1"></i> Add Row</button>
                     </div>
-                    
-                    <div id="assignRowsContainer" class="space-y-4">
-                        <!-- Rows will be added here -->
-                    </div>
-
+                    <div id="assignRowsContainer" class="space-y-4"></div>
                     <div class="mt-6 pt-4 border-t">
-                        <button onclick="adminSubmitBulkTasks()" class="bg-primary text-white px-8 py-3 rounded shadow hover:bg-blue-800 font-bold w-full md:w-auto flex justify-center items-center">
-                            <i class="fa-solid fa-paper-plane mr-2"></i> Assign All Tasks
-                        </button>
+                        <button onclick="adminSubmitBulkTasks()" class="bg-primary text-white px-8 py-3 rounded shadow hover:bg-blue-800 font-bold w-full md:w-auto flex justify-center items-center"><i class="fa-solid fa-paper-plane mr-2"></i> Assign All Tasks</button>
                     </div>
                 </div>
             </div>
@@ -126,37 +137,42 @@
             <div id="adminTabHistory" class="max-w-5xl mx-auto hidden space-y-4">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-2">
                     <input type="text" id="adminTaskFilter" placeholder="Filter tasks..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminTasks()">
-                    <button onclick="adminExportTasks()" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow">
-                        <i class="fa-solid fa-file-csv mr-2"></i> Export Tasks CSV
-                    </button>
+                    <button onclick="adminExportTasks()" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow"><i class="fa-solid fa-file-csv mr-2"></i> Export Tasks CSV</button>
                 </div>
                 <div id="adminTaskList" class="space-y-3"></div>
             </div>
 
-            <!-- 3. All Reports Tab (Read Only) -->
+            <!-- 3. All Reports Tab (Mobile Optimized) -->
             <div id="adminTabReports" class="max-w-6xl mx-auto hidden space-y-4">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-2 mb-4">
                     <input type="text" id="adminReportFilter" placeholder="Filter reports..." class="p-2 border rounded w-full md:w-1/3" onkeyup="renderAdminReports()">
                     <button onclick="adminExportReports()" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold shadow"><i class="fa-solid fa-file-csv mr-2"></i> Export Monthly Data</button>
                 </div>
-                <div class="bg-white rounded shadow overflow-hidden">
+                
+                <!-- Desktop Table View -->
+                <div class="hidden md:block bg-white rounded shadow overflow-hidden">
                     <table class="min-w-full text-sm text-left">
                         <thead class="bg-gray-200 text-gray-700 uppercase font-bold text-xs">
                             <tr>
                                 <th class="p-3">Date</th>
                                 <th class="p-3">Rep</th>
                                 <th class="p-3">Customer</th>
-                                <th class="p-3">Note (Outcome)</th>
+                                <th class="p-3">Note</th>
                             </tr>
                         </thead>
                         <tbody id="adminReportTableBody"></tbody>
                     </table>
                 </div>
+
+                <!-- Mobile Card View (New Feature) -->
+                <div id="adminReportMobileList" class="md:hidden space-y-3">
+                    <!-- Cards will be injected here -->
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- C. 销售界面 (Sales Dashboard) -->
+    <!-- C. 销售界面 (Sales) -->
     <div id="appSection" class="flex flex-col h-full hidden">
         <header class="bg-white border-b border-gray-200 shadow-sm z-20">
             <div class="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -168,54 +184,48 @@
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <!-- Assigned Task Button -->
                     <button onclick="toggleAssignedModal()" class="relative bg-gray-100 hover:bg-blue-50 text-primary p-2 rounded-lg transition mr-2">
                         <i class="fa-solid fa-bell text-xl"></i>
                         <span id="assignedCountBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
                         <span class="text-xs font-bold ml-1 hidden md:inline">Assigned</span>
                     </button>
+                    <!-- Sync Button -->
+                    <button onclick="refreshData()" class="text-gray-400 hover:text-primary mr-2"><i class="fa-solid fa-rotate"></i></button>
                     <button onclick="logout()" class="text-red-400 hover:text-red-600 ml-2"><i class="fa-solid fa-power-off text-lg"></i></button>
                 </div>
             </div>
         </header>
 
         <div class="flex flex-1 overflow-hidden relative">
-            <main class="flex-1 overflow-y-auto p-4 md:p-8 relative bg-gray-50">
-                <!-- 1. Search -->
+            <main id="salesMain" class="flex-1 overflow-y-auto p-4 md:p-8 relative bg-gray-50">
+                <div id="salesPullIndicator" class="pull-indicator"><i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh</div>
+
+                <!-- Search -->
                 <div class="max-w-4xl mx-auto mt-2">
                     <div class="relative max-w-2xl mx-auto">
-                        <input type="text" id="mainSearchInput" placeholder="Search Customer Name or Code..." 
-                            class="w-full pl-6 pr-14 py-4 rounded-full shadow-lg border-none focus:ring-2 focus:ring-accent outline-none text-lg"
-                            oninput="handleMainSearch(this.value)">
+                        <input type="text" id="mainSearchInput" placeholder="Search Customer Name or Code..." class="w-full pl-6 pr-14 py-4 rounded-full shadow-lg border-none focus:ring-2 focus:ring-accent outline-none text-lg" oninput="handleMainSearch(this.value)">
                         <i class="fa-solid fa-search absolute right-5 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                     </div>
                     <div id="mainSearchResult" class="mt-6 hidden max-w-2xl mx-auto"></div>
                 </div>
 
-                <!-- 2. Today's Task -->
+                <!-- Today's Task -->
                 <div class="max-w-5xl mx-auto mt-8 pb-24">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-bold text-gray-800 border-l-4 border-accent pl-3">Today's Task</h3>
-                        <button onclick="shareTaskToGroup()" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold shadow flex items-center">
-                            <i class="fa-brands fa-whatsapp mr-1"></i> Share Plan
-                        </button>
+                        <button onclick="shareTaskToGroup()" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold shadow flex items-center"><i class="fa-brands fa-whatsapp mr-1"></i> Share Plan</button>
                     </div>
-                    <!-- Added auto-rows to allow unlimited tasks -->
                     <div id="todayTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr"></div>
                 </div>
 
                 <!-- Write Report Btn -->
                 <div class="fixed bottom-8 right-8 z-10">
-                    <button onclick="openReportModal()" class="bg-primary hover:bg-blue-900 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition transform hover:scale-110">
-                        <i class="fa-solid fa-pen-to-square text-2xl"></i>
-                    </button>
+                    <button onclick="openReportModal()" class="bg-primary hover:bg-blue-900 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition transform hover:scale-110"><i class="fa-solid fa-pen-to-square text-2xl"></i></button>
                 </div>
             </main>
 
             <!-- Draggable Btn -->
-            <button id="draggableBtn" class="fixed right-0 top-1/2 bg-white text-primary p-3 rounded-l-xl shadow-lg border border-r-0 border-gray-100 hover:bg-gray-50 z-30 w-12 h-14 flex items-center justify-center">
-                <i class="fa-solid fa-chevron-left text-xl pointer-events-none"></i>
-            </button>
+            <button id="draggableBtn" class="fixed right-0 top-1/2 bg-white text-primary p-3 rounded-l-xl shadow-lg border border-r-0 border-gray-100 hover:bg-gray-50 z-30 w-12 h-14 flex items-center justify-center"><i class="fa-solid fa-chevron-left text-xl pointer-events-none"></i></button>
 
             <!-- Sidebar -->
             <div id="taskSidebar" class="sidebar sidebar-closed fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-40 flex flex-col">
@@ -245,10 +255,7 @@
             </div>
             <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
                 <div id="acceptTaskList" class="space-y-3"></div>
-                <div id="noAssignedTasksMsg" class="hidden text-center text-gray-400 mt-10">
-                    <i class="fa-solid fa-clipboard-check text-4xl mb-2"></i>
-                    <p>No pending tasks assigned.</p>
-                </div>
+                <div id="noAssignedTasksMsg" class="hidden text-center text-gray-400 mt-10"><i class="fa-solid fa-clipboard-check text-4xl mb-2"></i><p>No pending tasks assigned.</p></div>
             </div>
         </div>
     </div>
@@ -262,14 +269,10 @@
             </div>
             <div class="flex-1 overflow-y-auto p-6">
                 <div class="space-y-4" id="reportRows"></div>
-                <button onclick="addReportRow()" class="mt-6 w-full py-3 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-primary hover:text-primary font-bold">
-                    <i class="fa-solid fa-plus mr-1"></i> Add Another Customer
-                </button>
+                <button onclick="addReportRow()" class="mt-6 w-full py-3 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-primary hover:text-primary font-bold"><i class="fa-solid fa-plus mr-1"></i> Add Another Customer</button>
             </div>
             <div class="p-4 border-t bg-gray-50 flex justify-end">
-                <button onclick="submitReport()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold shadow-md flex items-center">
-                    <i class="fa-solid fa-paper-plane mr-2"></i> Submit & Save
-                </button>
+                <button onclick="submitReport()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold shadow-md flex items-center"><i class="fa-solid fa-paper-plane mr-2"></i> Submit & Save</button>
             </div>
         </div>
     </div>
@@ -288,12 +291,14 @@
         };
 
         window.onload = function() {
-            // FIX: checkSession is now called ONLY after CSV is fully loaded
             loadCSV();
             initDraggable();
+            checkSession();
+            initPullToRefresh('adminMain', 'adminPullIndicator');
+            initPullToRefresh('salesMain', 'salesPullIndicator');
         };
 
-        // --- Session Persistence ---
+        // --- Session (SessionStorage for v7.3 logic) ---
         function checkSession() {
             const saved = sessionStorage.getItem('salesMasterUser');
             if(saved) {
@@ -315,6 +320,72 @@
             btn.onclick = (e) => { if(isDragging)e.preventDefault(); else toggleSidebar(); };
         }
 
+        // --- Pull to Refresh Logic ---
+        function initPullToRefresh(containerId, indicatorId) {
+            const container = document.getElementById(containerId);
+            const indicator = document.getElementById(indicatorId);
+            let startY = 0;
+            let isPulling = false;
+
+            container.addEventListener('touchstart', (e) => {
+                if (container.scrollTop === 0) {
+                    startY = e.touches[0].clientY;
+                    isPulling = true;
+                }
+            });
+
+            container.addEventListener('touchmove', (e) => {
+                if (!isPulling) return;
+                const y = e.touches[0].clientY;
+                const diff = y - startY;
+                if (diff > 0 && diff < 200 && container.scrollTop === 0) {
+                    indicator.style.height = `${diff / 3}px`;
+                }
+            });
+
+            container.addEventListener('touchend', (e) => {
+                if (!isPulling) return;
+                isPulling = false;
+                const endY = e.changedTouches[0].clientY;
+                if (endY - startY > 80 && container.scrollTop === 0) {
+                    indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...';
+                    indicator.style.height = '50px';
+                    refreshData().then(() => {
+                        setTimeout(() => {
+                            indicator.style.height = '0px';
+                            indicator.innerHTML = '<i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh';
+                        }, 500);
+                    });
+                } else {
+                    indicator.style.height = '0px';
+                }
+            });
+        }
+
+        async function refreshData() {
+            if (!currentUser) return;
+            document.getElementById('globalLoader').classList.remove('hidden');
+            try {
+                if(currentUser.isAdmin) {
+                    await loadAllDataForAdmin();
+                    renderAdminTasks();
+                    renderAdminReports();
+                } else {
+                    await loadTasksFromCloud();
+                    await loadHistoryFromCloud();
+                    await loadAssignedTasksForRep();
+                    applySidebarFilter();
+                    renderTasks();
+                    updateAssignedBadge();
+                }
+            } catch (e) {
+                console.error("Refresh Error", e);
+                alert("Refresh failed. Check internet.");
+            } finally {
+                document.getElementById('globalLoader').classList.add('hidden');
+            }
+        }
+
         // --- Data Loading ---
         function loadCSV() {
             Papa.parse("customers.csv", {
@@ -328,7 +399,6 @@
                         phone: (item.Phone || item.phone || "").trim(),
                         credit: (item.Credit || item.credit || "0").trim()
                     }));
-                    checkSession(); // Check session AFTER data load
                 }
             });
         }
@@ -338,52 +408,29 @@
             const pass = document.getElementById('loginPassword').value.trim();
             const status = document.getElementById('loginStatus');
 
-            // 1. Admin Login
             if (code.toLowerCase() === 'admin' && pass === '8888') {
                 currentUser = { code: 'admin', name: 'Administrator', isAdmin: true };
                 sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
-                
-                document.getElementById('globalLoader').classList.remove('hidden');
-                await loadAllDataForAdmin();
+                await refreshData();
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('adminSection').classList.remove('hidden');
-                document.getElementById('globalLoader').classList.add('hidden');
-                
                 addAssignRow(); 
-                renderAdminTasks();
                 return;
             }
 
-            // 2. Sales Login
             if (pass !== '0000') { status.innerText = "Wrong Password"; status.classList.remove('hidden'); return; }
             const customers = allSalesData.filter(c => c.repCode == code);
-            if (customers.length === 0) { 
-                if(document.activeElement.id === 'loginRepCode' || document.activeElement.id === 'loginPassword') {
-                    status.innerText = "Code not found"; status.classList.remove('hidden'); 
-                }
-                return; 
-            }
+            if (customers.length === 0) { if(document.activeElement.id === 'loginRepCode') { status.innerText = "Code not found"; status.classList.remove('hidden'); } return; }
 
             myCustomers = customers;
             let finalName = repDirectory[code] || customers[0].csvRepName;
             currentUser = { code: code, name: finalName, isAdmin: false };
             sessionStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
             
-            document.getElementById('globalLoader').classList.remove('hidden');
-            try {
-                await loadTasksFromCloud(); 
-                await loadHistoryFromCloud(); 
-                await loadAssignedTasksForRep(); 
-
-                document.getElementById('loginSection').classList.add('hidden');
-                document.getElementById('appSection').classList.remove('hidden');
-                document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`;
-                document.getElementById('globalLoader').classList.add('hidden');
-                
-                applySidebarFilter();
-                renderTasks();
-                updateAssignedBadge();
-            } catch (e) { console.error(e); status.innerText="Cloud connection failed"; status.classList.remove('hidden'); document.getElementById('globalLoader').classList.add('hidden'); }
+            await refreshData();
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('appSection').classList.remove('hidden');
+            document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`;
         }
         
         function logout() { sessionStorage.removeItem('salesMasterUser'); location.reload(); }
@@ -393,7 +440,6 @@
         async function loadAllDataForAdmin() {
             const taskSnap = await db.collection('admin_tasks').orderBy('timestamp', 'desc').get();
             adminTasks = []; taskSnap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
-
             const repSnap = await db.collection('reports').orderBy('timestamp', 'desc').get();
             globalHistory = []; repSnap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
         }
@@ -408,378 +454,144 @@
             if(tab === 'reports') renderAdminReports();
         }
 
-        // --- Admin Bulk Assign (Multi Select Update) ---
-        function addAssignRow() {
-            const container = document.getElementById('assignRowsContainer');
-            const rowId = Date.now() + Math.random();
-            const div = document.createElement('div');
-            div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative";
-            
-            // Build Checkbox List for Reps
-            let repCheckboxes = '<div class="h-24 overflow-y-auto border rounded p-2 bg-white">';
-            for (const [code, name] of Object.entries(repDirectory)) {
-                repCheckboxes += `
-                    <label class="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                        <input type="checkbox" value="${code}" class="assign-rep-checkbox accent-primary">
-                        <span class="text-xs text-gray-700 font-bold">${name}</span>
-                    </label>
-                `;
-            }
-            repCheckboxes += '</div>';
-
-            div.innerHTML = `
-                <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">X</button>
-                <div>
-                    <label class="text-[10px] font-bold text-gray-500">SELECT SALES REPS (Multi)</label>
-                    ${repCheckboxes}
-                </div>
-                <div>
-                    <label class="text-[10px] font-bold text-gray-500">CUSTOMER</label>
-                    <div class="relative">
-                        <input type="text" placeholder="Search..." class="w-full p-2 border rounded text-sm" onkeyup="searchAdminCustInRow(this, '${rowId}')">
-                        <div id="res-${rowId}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div>
-                        <input type="hidden" class="assign-cust-id">
-                        <input type="hidden" class="assign-cust-name">
-                    </div>
-                </div>
-                <div>
-                    <label class="text-[10px] font-bold text-gray-500">INSTRUCTION</label>
-                    <input type="text" class="assign-note w-full p-2 border rounded text-sm" placeholder="Task details...">
-                </div>
-            `;
-            container.appendChild(div);
-        }
-
-        function searchAdminCustInRow(inp, rowId) {
-            const val = inp.value.toLowerCase();
-            const box = document.getElementById(`res-${rowId}`);
-            if(val.length<2) { box.classList.add('hidden'); return; }
-            box.innerHTML = ''; box.classList.remove('hidden');
-            allSalesData.filter(c => c.name.toLowerCase().includes(val) || c.id.toLowerCase().includes(val)).slice(0,10).forEach(c => {
-                const d = document.createElement('div'); d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm";
-                d.innerText = `${c.name} (${c.id}) - ${c.repCode}`;
-                d.onclick = () => {
-                    inp.value = c.name;
-                    inp.parentElement.querySelector('.assign-cust-id').value = c.id;
-                    inp.parentElement.querySelector('.assign-cust-name').value = c.name;
-                    box.classList.add('hidden');
-                }
-                box.appendChild(d);
-            });
-        }
-
-        async function adminSubmitBulkTasks() {
-            const rows = document.querySelectorAll('.assign-row');
-            const batch = db.batch();
-            let count = 0;
-            let localUpdates = [];
-
-            rows.forEach(row => {
-                // Get all checked boxes in this row
-                const selectedCheckboxes = row.querySelectorAll('.assign-rep-checkbox:checked');
-                const custId = row.querySelector('.assign-cust-id').value;
-                const custName = row.querySelector('.assign-cust-name').value;
-                const note = row.querySelector('.assign-note').value;
-
-                if(selectedCheckboxes.length > 0 && custId && note) {
-                    // Loop through each selected rep and create a task
-                    selectedCheckboxes.forEach(cb => {
-                        const repCode = cb.value;
-                        const ref = db.collection('admin_tasks').doc();
-                        const task = {
-                            repCode: repCode, 
-                            repName: repDirectory[repCode] || repCode,
-                            customerId: custId, 
-                            customerName: custName, 
-                            taskDetail: note,
-                            status: 'pending', 
-                            assignedDate: new Date().toLocaleDateString(),
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        };
-                        batch.set(ref, task);
-                        localUpdates.push({ docId: ref.id, ...task });
-                        count++;
-                    });
-                }
-            });
-
-            if(count === 0) return alert("Please select at least one rep and fill details.");
-            await batch.commit();
-            adminTasks = localUpdates.concat(adminTasks); 
-            alert(`${count} tasks assigned successfully!`);
-            document.getElementById('assignRowsContainer').innerHTML = '';
-            addAssignRow(); 
-        }
-
-        // --- Admin History & Export ---
-        function renderAdminTasks() {
-            const filter = document.getElementById('adminTaskFilter').value.toLowerCase();
-            const container = document.getElementById('adminTaskList');
-            container.innerHTML = '';
-            
-            adminTasks.filter(t => 
-                t.repName.toLowerCase().includes(filter) || 
-                t.customerName.toLowerCase().includes(filter) || 
-                t.assignedDate.includes(filter)
-            ).forEach(t => {
-                const div = document.createElement('div');
-                div.className = `p-3 rounded border flex justify-between items-center ${t.status === 'completed' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`;
-                div.innerHTML = `
-                    <div>
-                        <div class="font-bold text-gray-800">${t.repName} <span class="text-gray-400 text-xs">-></span> ${t.customerName}</div>
-                        <div class="text-xs text-gray-500">${t.assignedDate} | Note: ${t.taskDetail}</div>
-                        <div class="mt-1 text-xs font-bold uppercase ${t.status==='completed'?'text-green-600':'text-orange-500'}">Status: ${t.status}</div>
-                    </div>
-                    ${t.status === 'completed' ? `<button onclick="adminRestoreTask('${t.docId}')" class="text-blue-500 text-xs underline">Undo/Restore</button>` : ''}
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        function adminExportTasks() {
-            let csv = "AssignedDate,RepName,Customer,TaskDetail,Status\n";
-            adminTasks.forEach(t => {
-                csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`;
-            });
-            const link = document.createElement("a");
-            link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
-            link.download = `Assigned_Tasks_${new Date().toISOString().slice(0,10)}.csv`;
-            document.body.appendChild(link); link.click();
-        }
-
-        async function adminRestoreTask(docId) {
-            if(!confirm("Restore this task to Pending?")) return;
-            await db.collection('admin_tasks').doc(docId).update({ status: 'pending' });
-            const task = adminTasks.find(t => t.docId === docId);
-            if(task) task.status = 'pending';
-            renderAdminTasks();
-        }
-
-        // --- Admin Reports (Read Only) ---
+        // Admin Reports Optimized
         function renderAdminReports() {
             const filter = document.getElementById('adminReportFilter').value.toLowerCase();
             const tbody = document.getElementById('adminReportTableBody');
+            const mobileContainer = document.getElementById('adminReportMobileList');
             tbody.innerHTML = '';
+            mobileContainer.innerHTML = '';
             
             globalHistory.filter(r => 
                 r.repCode.toLowerCase().includes(filter) || 
                 (r.customerName && r.customerName.toLowerCase().includes(filter))
             ).forEach(r => {
                 const dateStr = new Date(r.date).toLocaleDateString();
+                const repName = repDirectory[r.repCode] || r.repCode;
+                
+                // Desktop View (Table)
                 const tr = document.createElement('tr');
                 tr.className = "border-b hover:bg-gray-50";
-                tr.innerHTML = `<td class="p-3">${dateStr}</td><td class="p-3 font-bold">${repDirectory[r.repCode] || r.repCode}</td><td class="p-3">${r.customerName}</td><td class="p-3 text-gray-600">${r.note}</td>`;
+                tr.innerHTML = `<td class="p-3">${dateStr}</td><td class="p-3 font-bold">${repName}</td><td class="p-3">${r.customerName}</td><td class="p-3 text-gray-600">${r.note}</td>`;
                 tbody.appendChild(tr);
+
+                // Mobile View (Cards)
+                const card = document.createElement('div');
+                card.className = "bg-white p-3 rounded shadow border-l-4 border-gray-500 mb-2";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-gray-800">${repName}</span>
+                        <span class="text-xs text-gray-400">${dateStr}</span>
+                    </div>
+                    <div class="text-sm font-bold text-primary mb-1">${r.customerName}</div>
+                    <div class="text-sm text-gray-600 bg-gray-50 p-2 rounded">${r.note}</div>
+                `;
+                mobileContainer.appendChild(card);
             });
         }
-        
+
         function adminExportReports() {
-            let csv = "Date,RepName,Customer,Note\n";
-            globalHistory.forEach(r => {
-                const repName = repDirectory[r.repCode] || r.repCode;
-                csv += `${new Date(r.date).toLocaleDateString()},${repName},${r.customerName},"${r.note}"\n`;
-            });
-            const link = document.createElement("a");
-            link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
-            link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`;
-            document.body.appendChild(link); link.click();
+            let csv = "Date,Rep,Customer,Note\n";
+            globalHistory.forEach(r => csv += `${new Date(r.date).toLocaleDateString()},${repDirectory[r.repCode] || r.repCode},${r.customerName},"${r.note}"\n`);
+            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
         }
+
+        // --- Admin Bulk Assign ---
+        function addAssignRow() {
+            const container = document.getElementById('assignRowsContainer'); const rowId = Date.now() + Math.random(); const div = document.createElement('div');
+            div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative";
+            let repCheckboxes = '<div class="h-24 overflow-y-auto border rounded p-2 bg-white">';
+            for (const [code, name] of Object.entries(repDirectory)) { repCheckboxes += `<label class="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" value="${code}" class="assign-rep-checkbox accent-primary"><span class="text-xs text-gray-700 font-bold">${name}</span></label>`; }
+            repCheckboxes += '</div>';
+            div.innerHTML = `<button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">X</button><div><label class="text-[10px] font-bold text-gray-500">SELECT REPS (Multi)</label>${repCheckboxes}</div><div><label class="text-[10px] font-bold text-gray-500">CUSTOMER</label><div class="relative"><input type="text" placeholder="Search..." class="w-full p-2 border rounded text-sm" onkeyup="searchAdminCustInRow(this, '${rowId}')"><div id="res-${rowId}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div><input type="hidden" class="assign-cust-id"><input type="hidden" class="assign-cust-name"></div></div><div><label class="text-[10px] font-bold text-gray-500">INSTRUCTION</label><input type="text" class="assign-note w-full p-2 border rounded text-sm" placeholder="Task details..."></div>`;
+            container.appendChild(div);
+        }
+        function searchAdminCustInRow(inp, rowId) {
+            const val = inp.value.toLowerCase(); const box = document.getElementById(`res-${rowId}`);
+            if(val.length<2) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden');
+            allSalesData.filter(c => c.name.toLowerCase().includes(val) || c.id.toLowerCase().includes(val)).slice(0,10).forEach(c => { const d = document.createElement('div'); d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText = `${c.name} (${c.id}) - ${c.repCode}`; d.onclick = () => { inp.value = c.name; inp.parentElement.querySelector('.assign-cust-id').value = c.id; inp.parentElement.querySelector('.assign-cust-name').value = c.name; box.classList.add('hidden'); }; box.appendChild(d); });
+        }
+        async function adminSubmitBulkTasks() {
+            const rows = document.querySelectorAll('.assign-row'); const batch = db.batch(); let count = 0; let localUpdates = [];
+            rows.forEach(row => {
+                const selectedCheckboxes = row.querySelectorAll('.assign-rep-checkbox:checked'); const custId = row.querySelector('.assign-cust-id').value; const custName = row.querySelector('.assign-cust-name').value; const note = row.querySelector('.assign-note').value;
+                if(selectedCheckboxes.length > 0 && custId && note) {
+                    selectedCheckboxes.forEach(cb => {
+                        const repCode = cb.value; const ref = db.collection('admin_tasks').doc();
+                        const task = { repCode: repCode, repName: repDirectory[repCode] || repCode, customerId: custId, customerName: custName, taskDetail: note, status: 'pending', assignedDate: new Date().toLocaleDateString(), timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+                        batch.set(ref, task); localUpdates.push({ docId: ref.id, ...task }); count++;
+                    });
+                }
+            });
+            if(count === 0) return alert("Select at least one rep and fill details.");
+            await batch.commit(); adminTasks = localUpdates.concat(adminTasks); alert(`${count} tasks assigned!`); document.getElementById('assignRowsContainer').innerHTML = ''; addAssignRow();
+        }
+        function renderAdminTasks() {
+            const filter = document.getElementById('adminTaskFilter').value.toLowerCase(); const container = document.getElementById('adminTaskList'); container.innerHTML = '';
+            adminTasks.filter(t => t.repName.toLowerCase().includes(filter) || t.customerName.toLowerCase().includes(filter) || t.assignedDate.includes(filter)).forEach(t => {
+                const div = document.createElement('div'); div.className = `p-3 rounded border flex justify-between items-center ${t.status === 'completed' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`;
+                div.innerHTML = `<div><div class="font-bold text-gray-800">${t.repName} <span class="text-gray-400 text-xs">-></span> ${t.customerName}</div><div class="text-xs text-gray-500">${t.assignedDate} | ${t.taskDetail}</div><div class="mt-1 text-xs font-bold uppercase ${t.status==='completed'?'text-green-600':'text-orange-500'}">${t.status}</div></div>${t.status === 'completed' ? `<button onclick="adminRestoreTask('${t.docId}')" class="text-blue-500 text-xs underline">Undo</button>` : ''}`; container.appendChild(div);
+            });
+        }
+        function adminExportTasks() {
+            let csv = "AssignedDate,Rep,Customer,Detail,Status\n"; adminTasks.forEach(t => csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`);
+            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
+        }
+        async function adminRestoreTask(docId) { if(confirm("Restore?")) { await db.collection('admin_tasks').doc(docId).update({ status: 'pending' }); const t = adminTasks.find(x=>x.docId===docId); if(t) t.status='pending'; renderAdminTasks(); } }
 
         // ================= SALES REP FUNCTIONS =================
-
         function getCustomerStats(custId) {
-            const now = new Date();
-            const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay() + 1); startOfWeek.setHours(0,0,0,0);
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            let week = 0, month = 0;
-            globalHistory.forEach(h => { if (h.customerId === custId) { const d = new Date(h.date); if (d >= startOfWeek) week++; if (d >= startOfMonth) month++; } });
-            return { week, month };
+            const now = new Date(); const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay() + 1); startOfWeek.setHours(0,0,0,0); const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            let week = 0, month = 0; globalHistory.forEach(h => { if (h.customerId === custId) { const d = new Date(h.date); if (d >= startOfWeek) week++; if (d >= startOfMonth) month++; } }); return { week, month };
         }
-
         function applySidebarFilter() {
-            const mode = document.getElementById('sidebarFilterMode').value;
-            const q = document.querySelector('#taskSidebar input').value.toLowerCase();
+            const mode = document.getElementById('sidebarFilterMode').value; const q = document.querySelector('#taskSidebar input').value.toLowerCase();
             let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q));
-            
-            if (mode === 'missed_week') filtered = filtered.filter(c => getCustomerStats(c.id).week === 0);
-            else if (mode === 'missed_month') filtered = filtered.filter(c => getCustomerStats(c.id).month === 0);
-            
+            if (mode === 'missed_week') filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); else if (mode === 'missed_month') filtered = filtered.filter(c => getCustomerStats(c.id).month === 0);
             const list = document.getElementById('customerSidebarList'); list.innerHTML = '';
             filtered.slice(0, 100).forEach(c => {
-                const stats = getCustomerStats(c.id);
-                const item = document.createElement('div');
-                item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer";
-                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div>
-                    <div class="flex items-center space-x-2"><div class="text-[10px] text-gray-500 text-right mr-2"><div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div><div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div></div><button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500"><i class="fa-solid fa-plus-circle text-xl"></i></button></div>`;
-                list.appendChild(item);
+                const stats = getCustomerStats(c.id); const item = document.createElement('div'); item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer";
+                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div><div class="flex items-center space-x-2"><div class="text-[10px] text-gray-500 text-right mr-2"><div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div><div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div></div><button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500"><i class="fa-solid fa-plus-circle text-xl"></i></button></div>`; list.appendChild(item);
             });
         }
         function filterSidebarList(val) { applySidebarFilter(); }
-
-        // --- Assigned Tasks ---
-        async function loadAssignedTasksForRep() {
-            const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get();
-            adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() }));
-        }
-
-        function toggleAssignedModal() {
-            const modal = document.getElementById('assignedTaskModal');
-            if (modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden');
-                renderAcceptTasks();
-            } else { modal.classList.add('hidden'); }
-        }
-
+        async function loadAssignedTasksForRep() { const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get(); adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() })); }
+        function toggleAssignedModal() { const modal = document.getElementById('assignedTaskModal'); if (modal.classList.contains('hidden')) { modal.classList.remove('hidden'); renderAcceptTasks(); } else { modal.classList.add('hidden'); } }
         function renderAcceptTasks() {
-            const container = document.getElementById('acceptTaskList');
-            const noMsg = document.getElementById('noAssignedTasksMsg');
-            container.innerHTML = '';
-            
-            if (adminTasks.length === 0) { noMsg.classList.remove('hidden'); return; }
-            noMsg.classList.add('hidden');
-
-            adminTasks.forEach(t => {
-                const div = document.createElement('div');
-                div.id = `accept-${t.docId}`;
-                div.className = "bg-white p-4 rounded shadow border-l-4 border-primary flex justify-between items-center animate-fade-in";
-                div.innerHTML = `<div><div class="font-bold text-gray-800">${t.customerName} <span class="text-xs bg-gray-200 px-1 rounded">${t.customerId}</span></div><div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-user-tag mr-1"></i> ${t.taskDetail}</div></div>
-                    <div class="flex space-x-3"><button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-10 h-10 rounded-full hover:bg-green-200 text-green-600 shadow" title="Add to Today"><i class="fa-solid fa-plus"></i></button><button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-10 h-10 rounded-full hover:bg-blue-800 text-white shadow" title="Mark Done"><i class="fa-solid fa-check"></i></button></div>`;
-                container.appendChild(div);
-            });
+            const container = document.getElementById('acceptTaskList'); const noMsg = document.getElementById('noAssignedTasksMsg'); container.innerHTML = '';
+            if (adminTasks.length === 0) { noMsg.classList.remove('hidden'); return; } noMsg.classList.add('hidden');
+            adminTasks.forEach(t => { const div = document.createElement('div'); div.id = `accept-${t.docId}`; div.className = "bg-white p-4 rounded shadow border-l-4 border-primary flex justify-between items-center animate-fade-in"; div.innerHTML = `<div><div class="font-bold text-gray-800">${t.customerName} <span class="text-xs bg-gray-200 px-1 rounded">${t.customerId}</span></div><div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-user-tag mr-1"></i> ${t.taskDetail}</div></div><div class="flex space-x-3"><button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-10 h-10 rounded-full hover:bg-green-200 text-green-600 shadow" title="Add to Today"><i class="fa-solid fa-plus"></i></button><button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-10 h-10 rounded-full hover:bg-blue-800 text-white shadow" title="Mark Done"><i class="fa-solid fa-check"></i></button></div>`; container.appendChild(div); });
         }
-        
-        function updateAssignedBadge() {
-            const badge = document.getElementById('assignedCountBadge');
-            if(adminTasks.length > 0) { badge.innerText = adminTasks.length; badge.classList.remove('hidden'); } 
-            else { badge.classList.add('hidden'); }
-        }
-
-        function addTaskToToday(docId, custId) {
-            addToTask(custId);
-            const btn = document.querySelector(`#accept-${docId} button`);
-            if(btn) btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>';
-        }
-
-        async function completeAssignedTask(docId) {
-            if(!confirm("Mark this task as completed?")) return;
-            await db.collection('admin_tasks').doc(docId).update({ status: 'completed', completedDate: new Date().toISOString() });
-            const el = document.getElementById(`accept-${docId}`); el.classList.add('task-fade-out');
-            setTimeout(() => { adminTasks = adminTasks.filter(t => t.docId !== docId); renderAcceptTasks(); updateAssignedBadge(); }, 500);
-        }
-
-        // --- Today's Task ---
-        async function loadTasksFromCloud() {
-            const doc = await db.collection('daily_tasks').doc(currentUser.code).get();
-            if (doc.exists && doc.data().date === new Date().toLocaleDateString()) { todayTasks = doc.data().tasks || []; } 
-            else { todayTasks = []; }
-        }
-
-        async function saveTasksToCloud() {
-            if(!currentUser || currentUser.isAdmin) return;
-            await db.collection('daily_tasks').doc(currentUser.code).set({ date: new Date().toLocaleDateString(), tasks: todayTasks });
-        }
-
-        async function loadHistoryFromCloud() {
-            const snap = await db.collection('reports').where('repCode', '==', currentUser.code).get();
-            globalHistory = []; snap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() }));
-        }
-
+        function updateAssignedBadge() { const badge = document.getElementById('assignedCountBadge'); if(adminTasks.length > 0) { badge.innerText = adminTasks.length; badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); } }
+        function addTaskToToday(docId, custId) { addToTask(custId); const btn = document.querySelector(`#accept-${docId} button`); if(btn) btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>'; }
+        async function completeAssignedTask(docId) { if(!confirm("Mark completed?")) return; await db.collection('admin_tasks').doc(docId).update({ status: 'completed', completedDate: new Date().toISOString() }); const el = document.getElementById(`accept-${docId}`); el.classList.add('task-fade-out'); setTimeout(() => { adminTasks = adminTasks.filter(t => t.docId !== docId); renderAcceptTasks(); updateAssignedBadge(); }, 500); }
+        async function loadTasksFromCloud() { const doc = await db.collection('daily_tasks').doc(currentUser.code).get(); if (doc.exists && doc.data().date === new Date().toLocaleDateString()) { todayTasks = doc.data().tasks || []; } else { todayTasks = []; } }
+        async function saveTasksToCloud() { if(!currentUser || currentUser.isAdmin) return; await db.collection('daily_tasks').doc(currentUser.code).set({ date: new Date().toLocaleDateString(), tasks: todayTasks }); }
+        async function loadHistoryFromCloud() { const snap = await db.collection('reports').where('repCode', '==', currentUser.code).get(); globalHistory = []; snap.forEach(doc => globalHistory.push({ docId: doc.id, ...doc.data() })); }
         function handleMainSearch(query) {
-            const container = document.getElementById('mainSearchResult');
-            if (query.length < 2) { container.classList.add('hidden'); return; }
+            const container = document.getElementById('mainSearchResult'); if (query.length < 2) { container.classList.add('hidden'); return; }
             const res = myCustomers.find(c => c.name.toLowerCase().includes(query.toLowerCase()) || c.id.toLowerCase().includes(query.toLowerCase()));
             container.classList.remove('hidden');
-            if (res) { container.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col md:flex-row justify-between items-center"><div class="mb-4 md:mb-0 text-left"><h3 class="text-xl font-bold text-primary">${res.name}</h3><div class="text-sm text-gray-500 mt-2 space-y-1"><div><i class="fa-solid fa-id-badge mr-2 w-5"></i> ${res.id}</div><div><a href="tel:${res.phone}" class="text-blue-600 hover:underline font-bold"><i class="fa-solid fa-phone mr-2 w-5"></i> ${res.phone}</a></div><div><i class="fa-solid fa-wallet mr-2 w-5"></i> Limit: ${res.credit}</div></div></div><button onclick="window.open('https://wa.me/233550584720?text=${encodeURIComponent(`I want statement of ${res.name} (${res.id})`)}', '_blank')" class="bg-green-100 text-green-700 px-5 py-2 rounded-lg font-bold hover:bg-green-200 transition"><i class="fa-brands fa-whatsapp mr-2"></i> Statement</button></div>`; } 
-            else { container.innerHTML = `<div class="bg-white p-4 rounded-xl text-center text-gray-400">Not Found</div>`; }
+            if (res) { container.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col md:flex-row justify-between items-center"><div class="mb-4 md:mb-0 text-left"><h3 class="text-xl font-bold text-primary">${res.name}</h3><div class="text-sm text-gray-500 mt-2 space-y-1"><div><i class="fa-solid fa-id-badge mr-2 w-5"></i> ${res.id}</div><div><a href="tel:${res.phone}" class="text-blue-600 hover:underline font-bold"><i class="fa-solid fa-phone mr-2 w-5"></i> ${res.phone}</a></div><div><i class="fa-solid fa-wallet mr-2 w-5"></i> Limit: ${res.credit}</div></div></div><button onclick="window.open('https://wa.me/233550584720?text=${encodeURIComponent(`I want statement of ${res.name} (${res.id})`)}', '_blank')" class="bg-green-100 text-green-700 px-5 py-2 rounded-lg font-bold hover:bg-green-200 transition"><i class="fa-brands fa-whatsapp mr-2"></i> Statement</button></div>`; } else { container.innerHTML = `<div class="bg-white p-4 rounded-xl text-center text-gray-400">Not Found</div>`; }
         }
-
         function toggleSidebar() { const sb = document.getElementById('taskSidebar'); sb.classList.toggle('sidebar-closed'); sb.classList.toggle('sidebar-open'); }
-        
-        function addToTask(id) {
-            if (!todayTasks.some(t => t.id === id)) {
-                todayTasks.push(myCustomers.find(c => c.id === id));
-                saveTasksToCloud(); renderTasks();
-            }
-        }
-        
-        window.removeFromTask = function(id) {
-            todayTasks = todayTasks.filter(t => t.id !== id);
-            saveTasksToCloud();
-            renderTasks();
-        }
-
-        function renderTasks() {
-            const box = document.getElementById('todayTaskList'); box.innerHTML = '';
-            todayTasks.forEach(t => {
-                const card = document.createElement('div'); card.className = "bg-white p-4 rounded-lg shadow-sm border relative group";
-                card.innerHTML = `<h4 class="font-bold text-gray-800">${t.name}</h4><a href="tel:${t.phone}" class="text-xs text-blue-500 hover:underline block my-1"><i class="fa-solid fa-phone"></i> ${t.phone}</a><button onclick="removeFromTask('${t.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-2"><i class="fa-solid fa-trash"></i></button>`;
-                box.appendChild(card);
-            });
-        }
-        
-        function shareTaskToGroup() {
-            if(todayTasks.length === 0) return alert("Task list is empty");
-            let msg = `*${currentUser.name}'s Plan*\n${new Date().toLocaleDateString()}\n------------------\n`;
-            todayTasks.forEach((t, i) => msg += `${i+1}. ${t.name}\n`);
-            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-        }
-
-        function openReportModal() {
-            const modal = document.getElementById('reportModal'); const container = document.getElementById('reportRows');
-            modal.classList.remove('hidden'); container.innerHTML = ''; 
-            if (todayTasks.length > 0) todayTasks.forEach(task => addReportRow(task)); else addReportRow(); 
-        }
+        function addToTask(id) { if (!todayTasks.some(t => t.id === id)) { todayTasks.push(myCustomers.find(c => c.id === id)); saveTasksToCloud(); renderTasks(); } }
+        window.removeFromTask = function(id) { todayTasks = todayTasks.filter(t => t.id !== id); saveTasksToCloud(); renderTasks(); }
+        function renderTasks() { const box = document.getElementById('todayTaskList'); box.innerHTML = ''; todayTasks.forEach(t => { const card = document.createElement('div'); card.className = "bg-white p-4 rounded-lg shadow-sm border relative group"; card.innerHTML = `<h4 class="font-bold text-gray-800">${t.name}</h4><a href="tel:${t.phone}" class="text-xs text-blue-500 hover:underline block my-1"><i class="fa-solid fa-phone"></i> ${t.phone}</a><button onclick="removeFromTask('${t.id}')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-2"><i class="fa-solid fa-trash"></i></button>`; box.appendChild(card); }); }
+        function shareTaskToGroup() { if(todayTasks.length === 0) return alert("Task list is empty"); let msg = `*${currentUser.name}'s Plan*\n${new Date().toLocaleDateString()}\n------------------\n`; todayTasks.forEach((t, i) => msg += `${i+1}. ${t.name}\n`); window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); }
+        function openReportModal() { const modal = document.getElementById('reportModal'); const container = document.getElementById('reportRows'); modal.classList.remove('hidden'); container.innerHTML = ''; if (todayTasks.length > 0) todayTasks.forEach(task => addReportRow(task)); else addReportRow(); }
         function closeReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
-
-        function addReportRow(prefillData = null) {
-            const id = Date.now() + Math.random(); const div = document.createElement('div');
-            div.id = `row-${id}`; div.className = "bg-gray-50 p-4 rounded border relative";
-            const custName = prefillData ? prefillData.name : ""; const custId = prefillData ? prefillData.id : "";
-            div.innerHTML = `<button onclick="document.getElementById('row-${id}').remove()" class="absolute right-2 top-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-times"></i></button><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="relative"><label class="text-xs font-bold text-gray-400">CUSTOMER</label><input type="text" value="${custName}" class="w-full p-2 border rounded mt-1 bg-white" placeholder="Search..." onkeyup="searchRepCust(this, '${id}')"><div id="res-${id}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden rounded border"></div><input type="hidden" id="vid-${id}" class="r-id" value="${custId}"><input type="hidden" id="vnm-${id}" class="r-nm" value="${custName}"></div><div class="md:col-span-2"><label class="text-xs font-bold text-gray-400">OUTCOME</label><input type="text" class="r-note w-full p-2 border rounded mt-1 bg-white" placeholder="Result..."></div></div>`;
-            document.getElementById('reportRows').appendChild(div);
-        }
-        function searchRepCust(inp, id) {
-            const val = inp.value.toLowerCase(); const box = document.getElementById(`res-${id}`);
-            if(val.length<1) { box.classList.add('hidden'); return; }
-            box.innerHTML = ''; box.classList.remove('hidden');
-            myCustomers.filter(c=>c.name.toLowerCase().includes(val)).slice(0,5).forEach(c=>{
-                const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name; d.onclick=()=>{ inp.value=c.name; document.getElementById(`vid-${id}`).value=c.id; document.getElementById(`vnm-${id}`).value=c.name; box.classList.add('hidden'); }; box.appendChild(d);
-            });
-        }
-
+        function addReportRow(prefillData = null) { const id = Date.now() + Math.random(); const div = document.createElement('div'); div.id = `row-${id}`; div.className = "bg-gray-50 p-4 rounded border relative"; const custName = prefillData ? prefillData.name : ""; const custId = prefillData ? prefillData.id : ""; div.innerHTML = `<button onclick="document.getElementById('row-${id}').remove()" class="absolute right-2 top-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-times"></i></button><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="relative"><label class="text-xs font-bold text-gray-400">CUSTOMER</label><input type="text" value="${custName}" class="w-full p-2 border rounded mt-1 bg-white" placeholder="Search..." onkeyup="searchRepCust(this, '${id}')"><div id="res-${id}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden rounded border"></div><input type="hidden" id="vid-${id}" class="r-id" value="${custId}"><input type="hidden" id="vnm-${id}" class="r-nm" value="${custName}"></div><div class="md:col-span-2"><label class="text-xs font-bold text-gray-400">OUTCOME</label><input type="text" class="r-note w-full p-2 border rounded mt-1 bg-white" placeholder="Result..."></div></div>`; document.getElementById('reportRows').appendChild(div); }
+        function searchRepCust(inp, id) { const val = inp.value.toLowerCase(); const box = document.getElementById(`res-${id}`); if(val.length<1) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden'); myCustomers.filter(c=>c.name.toLowerCase().includes(val)).slice(0,5).forEach(c=>{ const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name; d.onclick=()=>{ inp.value=c.name; document.getElementById(`vid-${id}`).value=c.id; document.getElementById(`vnm-${id}`).value=c.name; box.classList.add('hidden'); }; box.appendChild(d); }); }
+        
         async function submitReport() {
-            const rows = document.querySelectorAll('.r-id');
-            let txt = `*Report-${currentUser.name}*\n${new Date().toLocaleDateString()}\n\n`;
-            let historyBatch = [];
-            let hasData = false;
-
-            // 1. Collect Data
-            rows.forEach(r => {
-                const rowId = r.id.split('-')[1];
-                const nm = document.getElementById(`vnm-${rowId}`).value;
-                const note = r.parentElement.parentElement.parentElement.querySelector('.r-note').value;
-                if(nm && note) {
-                    txt += `📍 *${nm}*\n   └ ${note}\n`;
-                    historyBatch.push({ date: new Date().toISOString(), customerId: r.value, customerName: nm, note: note, repCode: currentUser.code });
-                    hasData = true;
-                }
-            });
-
+            const rows = document.querySelectorAll('.r-id'); let txt = `*Report-${currentUser.name}*\n${new Date().toLocaleDateString()}\n\n`; let historyBatch = []; let hasData = false;
+            rows.forEach(r => { const rowId = r.id.split('-')[1]; const nm = document.getElementById(`vnm-${rowId}`).value; const note = r.parentElement.parentElement.parentElement.querySelector('.r-note').value; if(nm && note) { txt += `📍 *${nm}*\n   └ ${note}\n`; historyBatch.push({ date: new Date().toISOString(), customerId: r.value, customerName: nm, note: note, repCode: currentUser.code }); hasData = true; } });
             if(!hasData) return alert("Fill report details");
-
-            // 2. Fire and Forget Save (Optimistic UI)
-            const batch = db.batch();
-            historyBatch.forEach(r => { 
-                const ref = db.collection('reports').doc(); 
-                batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); 
-            });
+            const batch = db.batch(); historyBatch.forEach(r => { const ref = db.collection('reports').doc(); batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); });
             batch.commit().catch(e => console.error(e));
-
-            // 3. Update Local State
-            globalHistory = globalHistory.concat(historyBatch); 
-            applySidebarFilter(); 
-
-            // 4. iOS-Friendly Redirect
+            globalHistory = globalHistory.concat(historyBatch); applySidebarFilter();
+            // iOS Optimistic Redirect
             window.location.href = `https://wa.me/?text=${encodeURIComponent(txt)}`;
             closeReportModal();
         }
