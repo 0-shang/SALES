@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 7.2</title>
+    <title>Sales Master Pro 7.3 (iOS Fixed)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -14,7 +14,7 @@
 
     <script>
         // ----------------------------------------------------
-        // ★★★ Firebase 配置 ★★★
+        // ★★★ Firebase 配置 (已填入你的信息) ★★★
         // ----------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyCE1Jsq7LPBcJdPcW7DPMAEfxQ6dJHCIb4",
@@ -200,6 +200,7 @@
                             <i class="fa-brands fa-whatsapp mr-1"></i> Share Plan
                         </button>
                     </div>
+                    <!-- Added auto-rows to allow unlimited tasks -->
                     <div id="todayTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr"></div>
                 </div>
 
@@ -287,6 +288,7 @@
         };
 
         window.onload = function() {
+            // FIX: checkSession is now called ONLY after CSV is fully loaded
             loadCSV();
             initDraggable();
         };
@@ -745,8 +747,41 @@
             });
         }
 
-       移除 await：代码不再等待数据库说“我存好了”
-            } catch(e) { alert("Failed to save to cloud."); console.error(e); }
+        async function submitReport() {
+            const rows = document.querySelectorAll('.r-id');
+            let txt = `*Report-${currentUser.name}*\n${new Date().toLocaleDateString()}\n\n`;
+            let historyBatch = [];
+            let hasData = false;
+
+            // 1. Collect Data
+            rows.forEach(r => {
+                const rowId = r.id.split('-')[1];
+                const nm = document.getElementById(`vnm-${rowId}`).value;
+                const note = r.parentElement.parentElement.parentElement.querySelector('.r-note').value;
+                if(nm && note) {
+                    txt += `📍 *${nm}*\n   └ ${note}\n`;
+                    historyBatch.push({ date: new Date().toISOString(), customerId: r.value, customerName: nm, note: note, repCode: currentUser.code });
+                    hasData = true;
+                }
+            });
+
+            if(!hasData) return alert("Fill report details");
+
+            // 2. Fire and Forget Save (Optimistic UI)
+            const batch = db.batch();
+            historyBatch.forEach(r => { 
+                const ref = db.collection('reports').doc(); 
+                batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); 
+            });
+            batch.commit().catch(e => console.error(e));
+
+            // 3. Update Local State
+            globalHistory = globalHistory.concat(historyBatch); 
+            applySidebarFilter(); 
+
+            // 4. iOS-Friendly Redirect
+            window.location.href = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+            closeReportModal();
         }
     </script>
 </body>
