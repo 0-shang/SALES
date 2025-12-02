@@ -745,29 +745,7 @@
             });
         }
 
-        async function submitReport() {
-            const rows = document.querySelectorAll('.r-id');
-            let txt = `*Report-${currentUser.name}*\n${new Date().toLocaleDateString()}\n\n`;
-            let historyBatch = [];
-            let hasData = false;
-            rows.forEach(r => {
-                const rowId = r.id.split('-')[1]; const nm = document.getElementById(`vnm-${rowId}`).value;
-                const note = r.parentElement.parentElement.parentElement.querySelector('.r-note').value;
-                if(nm && note) {
-                    txt += `📍 *${nm}*\n   └ ${note}\n`;
-                    historyBatch.push({ date: new Date().toISOString(), customerId: r.value, customerName: nm, note: note, repCode: currentUser.code });
-                    hasData = true;
-                }
-            });
-            if(!hasData) return alert("Fill report details");
-            try {
-                const batch = db.batch();
-                historyBatch.forEach(r => { const ref = db.collection('reports').doc(); batch.set(ref, { ...r, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); });
-                await batch.commit();
-                globalHistory = globalHistory.concat(historyBatch); 
-                applySidebarFilter(); 
-                window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
-                closeReportModal();
+       移除 await：代码不再等待数据库说“我存好了”
             } catch(e) { alert("Failed to save to cloud."); console.error(e); }
         }
     </script>
