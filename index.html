@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 9.9.9 Fixed</title>
+    <title>Sales Master Pro 10.0</title>
     
     <!-- ★★★ 图标配置 ★★★ -->
     <script>
@@ -58,7 +58,7 @@
             "short_name": "SalesMaster",
             "start_url": ".",
             "display": "standalone",
-            "background_color": "#ffffff",
+            "background_color": "#1e3a8a",
             "theme_color": "#1e3a8a",
             "orientation": "portrait",
             "icons": [
@@ -94,6 +94,12 @@
         .sidebar { transition: transform 0.3s ease-in-out; }
         .sidebar-closed { transform: translateX(100%); }
         .sidebar-open { transform: translateX(0); }
+        
+        /* New Request History Sidebar */
+        .req-sidebar { transition: transform 0.3s ease-in-out; }
+        .req-sidebar-closed { transform: translateX(100%); }
+        .req-sidebar-open { transform: translateX(0); }
+
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #bbb; border-radius: 3px; }
@@ -283,6 +289,7 @@
                 <span class="text-[10px] pointer-events-none">LIST</span>
             </button>
 
+            <!-- Customer Sidebar -->
             <div id="taskSidebar" class="sidebar sidebar-closed fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-40 flex flex-col">
                 <div class="p-4 bg-primary text-white flex justify-between items-center">
                     <h3 class="font-bold">Select Customers</h3>
@@ -305,7 +312,11 @@
     <div id="productSearchPage" class="fixed inset-0 z-[60] bg-gray-100 hidden flex flex-col h-screen animate-fade-in">
         <div class="bg-primary text-white p-4 shadow-md flex justify-between items-center shrink-0">
             <h2 class="text-xl font-bold flex items-center"><i class="fa-solid fa-box-open mr-2"></i> Product List</h2>
-            <button onclick="closeProductPage()" class="text-white hover:text-gray-300 text-2xl"><i class="fa-solid fa-times"></i></button>
+            <div class="flex items-center space-x-4">
+                <!-- Request History Button -->
+                <button onclick="toggleRequestSidebar()" class="text-white hover:text-gray-200 text-sm font-bold flex items-center bg-blue-800 px-3 py-1.5 rounded-full"><i class="fa-solid fa-clock-rotate-left mr-1"></i> History</button>
+                <button onclick="closeProductPage()" class="text-white hover:text-gray-300 text-2xl"><i class="fa-solid fa-times"></i></button>
+            </div>
         </div>
         
         <div class="p-4 flex flex-col flex-1 overflow-hidden max-w-5xl mx-auto w-full">
@@ -333,6 +344,17 @@
                     <i class="fa-solid fa-magnifying-glass text-4xl mb-3"></i>
                     <p>Enter keywords to search.</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- NEW: Request History Sidebar -->
+        <div id="requestSidebar" class="req-sidebar req-sidebar-closed fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-[70] flex flex-col">
+            <div class="p-4 bg-primary text-white flex justify-between items-center">
+                <h3 class="font-bold">Request History</h3>
+                <button onclick="toggleRequestSidebar()"><i class="fa-solid fa-times text-lg"></i></button>
+            </div>
+            <div id="myRequestList" class="flex-1 overflow-y-auto p-2 space-y-2 pb-20 bg-gray-50">
+                <!-- Populated by JS -->
             </div>
         </div>
     </div>
@@ -380,7 +402,7 @@
         let adminTasks = [];
         let adminExportLogs = []; 
         
-        let repDirectory = {};
+        let repDirectory = {}; // 1. Dynamic Directory
 
         window.onload = function() {
             setTimeout(() => {
@@ -423,13 +445,12 @@
             } catch (e) { console.error(e); } 
         }
 
-        // 3. Dynamic Rep Directory Construction
+        // ★★★ 1. Build Rep Directory from CSV ★★★
         function loadCSV() { 
             Papa.parse("customers.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { 
                 allSalesData = results.data.map(item => {
                     const rCode = (item.Limit||item.limit||"").trim().toUpperCase();
                     const rName = (item.RepName||item.repname||"Sales").trim();
-                    // Build directory dynamically
                     if(rCode && rName) repDirectory[rCode] = rName;
                     
                     return { 
@@ -443,92 +464,11 @@
                 }); 
             }}); 
         }
-        
-        function loadProductCSV() { 
-            Papa.parse("products.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { 
-                allProductData = results.data.map(item => ({ 
-                    code: (item.Code||item.code||"").trim(), 
-                    name: (item.Name||item.name||"").trim(), 
-                    stock: parseFloat(item.Stock||item.stock||"0"), 
-                    price: (item.Price||item.price||"0").trim(),
-                    promo: (item.PromoPrice||item.promoprice||"").trim(), 
-                    isNew: (item.New||item.new||"0").trim() 
-                })); 
-            }}); 
-        }
+        function loadProductCSV() { Papa.parse("products.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { allProductData = results.data.map(item => ({ code: (item.Code||item.code||"").trim(), name: (item.Name||item.name||"").trim(), stock: parseFloat(item.Stock||item.stock||"0"), price: (item.Price||item.price||"0").trim(), promo: (item.PromoPrice||item.promoprice||"").trim(), isNew: (item.New||item.new||"0").trim() })); } }); }
 
-        async function performLogin(silent = false) { 
-            const code = document.getElementById('loginRepCode').value.trim(); 
-            const pass = document.getElementById('loginPassword').value.trim(); 
-            const status = document.getElementById('loginStatus'); 
-            const btn = document.getElementById('btnLogin');
-
-            if (!silent) {
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin animate-spin"></i> Checking...';
-                btn.classList.add('btn-loading');
-            }
-
-            if (!silent) await new Promise(r => setTimeout(r, 50));
-
-            if (code.toLowerCase() === 'admin' && pass === '8888') { 
-                currentUser = { code: 'admin', name: 'Administrator', isAdmin: true }; 
-                localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
-                await refreshData(); 
-                document.getElementById('loginSection').classList.add('hidden'); 
-                document.getElementById('adminSection').classList.remove('hidden'); 
-                document.body.classList.add('loaded');
-                addAssignRow(); initAdminReportFilters(); 
-                if(!silent) resetLoginBtn();
-                return; 
-            } 
-            
-            if (pass !== '0000') { 
-                if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); }
-                return; 
-            } 
-            
-            const customers = allSalesData.filter(c => c.repCode == code); 
-            if (customers.length === 0) { 
-                if (allSalesData.length === 0 && !silent) {
-                     status.innerText = "Data syncing... try again."; status.classList.remove('hidden'); resetLoginBtn(); return;
-                }
-                if(document.activeElement.id === 'loginRepCode' && !silent) { 
-                    status.innerText = "Code not found"; status.classList.remove('hidden'); 
-                } 
-                if(!silent) resetLoginBtn();
-                return; 
-            } 
-            
-            myCustomers = customers; 
-            let finalName = repDirectory[code] || customers[0].csvRepName; 
-            currentUser = { code: code, name: finalName, isAdmin: false }; 
-            localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
-            
-            await refreshData(); 
-            document.getElementById('loginSection').classList.add('hidden'); 
-            document.getElementById('appSection').classList.remove('hidden'); 
-            document.body.classList.add('loaded'); 
-            document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; 
-            listenForPdfStatus();
-            if(!silent) resetLoginBtn();
-        }
-
-        function resetLoginBtn() {
-            const btn = document.getElementById('btnLogin');
-            btn.innerHTML = 'LOGIN';
-            btn.classList.remove('btn-loading');
-        }
-        
-        function logout() { 
-            localStorage.removeItem('salesMasterUser'); 
-            currentUser = null;
-            document.getElementById('appSection').classList.add('hidden');
-            document.getElementById('adminSection').classList.add('hidden');
-            document.getElementById('loginSection').classList.remove('hidden');
-            document.getElementById('loginRepCode').value = '';
-            document.getElementById('loginPassword').value = '';
-            document.body.classList.remove('loaded');
-        }
+        async function performLogin(silent = false) { const code = document.getElementById('loginRepCode').value.trim(); const pass = document.getElementById('loginPassword').value.trim(); const status = document.getElementById('loginStatus'); const btn = document.getElementById('btnLogin'); if (!silent) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin animate-spin"></i> Checking...'; btn.classList.add('btn-loading'); } if (!silent) await new Promise(r => setTimeout(r, 50)); if (code.toLowerCase() === 'admin' && pass === '8888') { currentUser = { code: 'admin', name: 'Administrator', isAdmin: true }; localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); await refreshData(); document.getElementById('loginSection').classList.add('hidden'); document.getElementById('adminSection').classList.remove('hidden'); document.body.classList.add('loaded'); addAssignRow(); initAdminReportFilters(); if(!silent) resetLoginBtn(); return; } if (pass !== '0000') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; } const customers = allSalesData.filter(c => c.repCode == code); if (customers.length === 0) { if (allSalesData.length === 0 && !silent) { status.innerText = "Data syncing... try again."; status.classList.remove('hidden'); resetLoginBtn(); return; } if(document.activeElement.id === 'loginRepCode' && !silent) { status.innerText = "Code not found"; status.classList.remove('hidden'); } if(!silent) resetLoginBtn(); return; } myCustomers = customers; let finalName = repDirectory[code] || customers[0].csvRepName; currentUser = { code: code, name: finalName, isAdmin: false }; localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); await refreshData(); document.getElementById('loginSection').classList.add('hidden'); document.getElementById('appSection').classList.remove('hidden'); document.body.classList.add('loaded'); document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; listenForPdfStatus(); listenForHistory(); if(!silent) resetLoginBtn(); }
+        function resetLoginBtn() { const btn = document.getElementById('btnLogin'); btn.innerHTML = 'LOGIN'; btn.classList.remove('btn-loading'); }
+        function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; document.body.classList.remove('loaded'); }
 
         // ================= ADMIN FUNCTIONS =================
         async function loadAllDataForAdmin() {
@@ -542,47 +482,39 @@
         function switchAdminTab(tab) { ['assign','history','reports','exports'].forEach(t => { document.getElementById(`adminTab${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.add('hidden'); document.getElementById(`btnTab${t.charAt(0).toUpperCase()+t.slice(1)}`).className = "flex-1 py-3 hover:bg-blue-700 text-gray-300"; }); document.getElementById(`adminTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.remove('hidden'); document.getElementById(`btnTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).className = "flex-1 py-3 hover:bg-blue-700 text-accent font-bold border-b-2 border-accent"; if(tab === 'reports') { initAdminReportFilters(); renderAdminReports(); } if(tab === 'exports') { renderAdminRequests(); } }
         function initAdminReportFilters() { const sel = document.getElementById('adminReportRepFilter'); if(sel.options.length > 1) return; for (const [code, name] of Object.entries(repDirectory)) sel.innerHTML += `<option value="${code}">${name} (${code})</option>`; }
         function renderAdminReports() { const dateVal = document.getElementById('adminReportDateFilter').value; const repVal = document.getElementById('adminReportRepFilter').value; const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase(); const tbody = document.getElementById('adminReportTableBody'); const mobileContainer = document.getElementById('adminReportMobileList'); tbody.innerHTML = ''; mobileContainer.innerHTML = ''; globalHistory.filter(r => { let matchDate = true; if (dateVal) { const rDate = new Date(r.date); const filterDate = new Date(dateVal); matchDate = (rDate.toDateString() === filterDate.toDateString()); } let matchRep = true; if (repVal) matchRep = (r.repCode === repVal); let matchText = true; if (textVal) matchText = (r.customerName && r.customerName.toLowerCase().includes(textVal)); return matchDate && matchRep && matchText; }).forEach(r => { const dateStr = new Date(r.date).toLocaleDateString(); const repName = repDirectory[r.repCode] || r.repCode; tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-3">${dateStr}</td><td class="p-3 font-bold">${repName}</td><td class="p-3">${r.customerName}</td><td class="p-3 text-gray-600">${r.note}</td></tr>`; mobileContainer.innerHTML += `<div class="bg-white p-3 rounded shadow border-l-4 border-gray-500 mb-2"><div class="flex justify-between items-center mb-1"><span class="font-bold text-gray-800">${repName}</span><span class="text-xs text-gray-400">${dateStr}</span></div><div class="text-sm font-bold text-primary mb-1">${r.customerName}</div><div class="text-sm text-gray-600 bg-gray-50 p-2 rounded">${r.note}</div></div>`; }); }
-        
-        // ★★★ 修复 Admin Requests 显示问题 ★★★
+        function adminExportReports() {
+            let csv = "Date,Rep,Customer,Note\n"; const dateVal = document.getElementById('adminReportDateFilter').value; const repVal = document.getElementById('adminReportRepFilter').value; const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase();
+            globalHistory.filter(r => { let matchDate = true; if (dateVal) { const rDate = new Date(r.date); const fDate = new Date(dateVal); matchDate = (rDate.toDateString() === fDate.toDateString()); } let matchRep = true; if (repVal) matchRep = (r.repCode === repVal); let matchText = true; if (textVal) matchText = (r.customerName && r.customerName.toLowerCase().includes(textVal)); return matchDate && matchRep && matchText; }).forEach(r => csv += `${new Date(r.date).toLocaleDateString()},${repDirectory[r.repCode] || r.repCode},${r.customerName},"${r.note}"\n`);
+            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
+        }
         async function renderAdminRequests() {
-            const list = document.getElementById('adminRequestList');
-            list.innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
-            // 移除 orderBy 避免索引问题
-            const snap = await db.collection('pdf_requests').where('status', '==', 'pending').get(); 
-            list.innerHTML = '';
-            
-            let requests = [];
-            snap.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
-            // 内存排序
-            requests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
-            if (requests.length === 0) { list.innerHTML = '<div class="text-gray-400 text-center p-4">No pending requests.</div>'; return; }
-            
-            requests.forEach(req => {
-                const ts = req.timestamp ? new Date(req.timestamp.seconds * 1000).toLocaleTimeString() : 'Just now';
-                list.innerHTML += `
-                    <div class="bg-white p-4 rounded shadow border-l-4 border-orange-400 flex justify-between items-center">
-                        <div><div class="font-bold text-gray-800">${req.repName} <span class="text-xs text-gray-400 font-normal">(${ts})</span></div><div class="text-sm text-gray-600">Requesting: <span class="font-mono bg-gray-100 px-1 rounded">${req.query}</span></div></div>
-                        <div class="flex space-x-3"><button onclick="adminRejectRequest('${req.id}')" class="bg-red-100 text-red-600 w-10 h-10 rounded-full hover:bg-red-200"><i class="fa-solid fa-times"></i></button><button onclick="adminApproveRequest('${req.id}')" class="bg-green-100 text-green-600 w-10 h-10 rounded-full hover:bg-green-200"><i class="fa-solid fa-check"></i></button></div>
-                    </div>`;
-            });
+            const list = document.getElementById('adminRequestList'); list.innerHTML = '<div class="text-center"><div class="spinner"></div></div>'; const snap = await db.collection('pdf_requests').where('status', '==', 'pending').orderBy('timestamp', 'desc').limit(50).get(); list.innerHTML = '';
+            if (snap.empty) { list.innerHTML = '<div class="text-gray-400 text-center p-4">No pending requests.</div>'; return; }
+            snap.forEach(doc => { const req = doc.data(); const ts = req.timestamp ? req.timestamp.toDate().toLocaleTimeString() : 'Just now'; list.innerHTML += `<div class="bg-white p-4 rounded shadow border-l-4 border-orange-400 flex justify-between items-center"><div><div class="font-bold text-gray-800">${req.repName} <span class="text-xs text-gray-400 font-normal">(${ts})</span></div><div class="text-sm text-gray-600">Requesting: <span class="font-mono bg-gray-100 px-1 rounded">${req.query}</span></div></div><div class="flex space-x-3"><button onclick="adminRejectRequest('${doc.id}')" class="bg-red-100 text-red-600 w-10 h-10 rounded-full hover:bg-red-200"><i class="fa-solid fa-times"></i></button><button onclick="adminApproveRequest('${doc.id}')" class="bg-green-100 text-green-600 w-10 h-10 rounded-full hover:bg-green-200"><i class="fa-solid fa-check"></i></button></div></div>`; });
         }
         async function adminApproveRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'approved'}); renderAdminRequests(); }
         async function adminRejectRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'rejected'}); renderAdminRequests(); }
 
-        function addAssignRow() { const container = document.getElementById('assignRowsContainer'); const rowId = Date.now() + Math.random(); let repCheckboxes = '<div class="h-24 overflow-y-auto border rounded p-2 bg-white">'; for (const [code, name] of Object.entries(repDirectory)) { repCheckboxes += `<label class="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" value="${code}" class="assign-rep-checkbox accent-primary"><span class="text-xs text-gray-700 font-bold">${name}</span></label>`; } repCheckboxes += '</div>'; const div = document.createElement('div'); div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative"; div.innerHTML = `<button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">X</button><div><label class="text-[10px] font-bold text-gray-500">SELECT REPS</label>${repCheckboxes}</div><div><label class="text-[10px] font-bold text-gray-500">CUSTOMER</label><div class="relative"><input type="text" placeholder="Search..." class="w-full p-2 border rounded text-sm" onkeyup="searchAdminCustInRow(this, '${rowId}')"><div id="res-${rowId}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div><input type="hidden" class="assign-cust-id"><input type="hidden" class="assign-cust-name"></div></div><div><label class="text-[10px] font-bold text-gray-500">INSTRUCTION</label><input type="text" class="assign-note w-full p-2 border rounded text-sm" placeholder="Task details..."></div>`; container.appendChild(div); }
+        // ★★★ 1. Fixed: Iterate dynamic repDirectory instead of empty object ★★★
+        function addAssignRow() { 
+            const container = document.getElementById('assignRowsContainer'); 
+            const rowId = Date.now() + Math.random(); 
+            let repCheckboxes = '<div class="h-24 overflow-y-auto border rounded p-2 bg-white">'; 
+            
+            // Fix: Ensure we use the populated repDirectory
+            for (const [code, name] of Object.entries(repDirectory)) { 
+                repCheckboxes += `<label class="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" value="${code}" class="assign-rep-checkbox accent-primary"><span class="text-xs text-gray-700 font-bold">${name}</span></label>`; 
+            } 
+            repCheckboxes += '</div>'; 
+            
+            const div = document.createElement('div'); div.className = "assign-row bg-gray-50 p-3 rounded border grid grid-cols-1 md:grid-cols-3 gap-2 relative"; div.innerHTML = `<button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">X</button><div><label class="text-[10px] font-bold text-gray-500">SELECT REPS</label>${repCheckboxes}</div><div><label class="text-[10px] font-bold text-gray-500">CUSTOMER</label><div class="relative"><input type="text" placeholder="Search..." class="w-full p-2 border rounded text-sm" onkeyup="searchAdminCustInRow(this, '${rowId}')"><div id="res-${rowId}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden border"></div><input type="hidden" class="assign-cust-id"><input type="hidden" class="assign-cust-name"></div></div><div><label class="text-[10px] font-bold text-gray-500">INSTRUCTION</label><input type="text" class="assign-note w-full p-2 border rounded text-sm" placeholder="Task details..."></div>`; container.appendChild(div); 
+        }
+        
         function searchAdminCustInRow(inp, rowId) { const val = inp.value.toLowerCase(); const box = document.getElementById(`res-${rowId}`); if(val.length<2) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden'); allSalesData.filter(c => c.name.toLowerCase().includes(val)).slice(0,10).forEach(c => { const d = document.createElement('div'); d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText = `${c.name} (${c.id})`; d.onclick = () => { inp.value = c.name; inp.parentElement.querySelector('.assign-cust-id').value = c.id; inp.parentElement.querySelector('.assign-cust-name').value = c.name; box.classList.add('hidden'); }; box.appendChild(d); }); }
         async function adminSubmitBulkTasks() { const rows = document.querySelectorAll('.assign-row'); const batch = db.batch(); let count = 0; rows.forEach(row => { const cbs = row.querySelectorAll('.assign-rep-checkbox:checked'); const cid = row.querySelector('.assign-cust-id').value; const cnm = row.querySelector('.assign-cust-name').value; const nt = row.querySelector('.assign-note').value; if(cbs.length && cid && nt) { cbs.forEach(cb => { const ref = db.collection('admin_tasks').doc(); batch.set(ref, { repCode: cb.value, repName: repDirectory[cb.value], customerId: cid, customerName: cnm, taskDetail: nt, status: 'pending', assignedDate: new Date().toLocaleDateString(), timestamp: firebase.firestore.FieldValue.serverTimestamp() }); count++; }); } }); if(count>0) { await batch.commit(); alert('Tasks Assigned'); document.getElementById('assignRowsContainer').innerHTML = ''; addAssignRow(); } }
         function renderAdminTasks() { const f = document.getElementById('adminTaskFilter').value.toLowerCase(); document.getElementById('adminTaskList').innerHTML = adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).map(t => `<div class="p-3 rounded border flex justify-between items-center ${t.status==='completed'?'bg-green-50':'bg-white'}"><div><div class="font-bold text-gray-800">${t.repName} -> ${t.customerName}</div><div class="text-xs text-gray-500">${t.assignedDate} | ${t.taskDetail}</div></div>${t.status==='completed'?'':`<button onclick="adminRestoreTask('${t.docId}')" class="text-red-500 text-xs">Delete</button>`}</div>`).join(''); }
         async function adminRestoreTask(id) { if(confirm('Delete?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
-        function adminExportTasks() {
-            let csv = "AssignedDate,Rep,Customer,Detail,Status\n";
-            const f = document.getElementById('adminTaskFilter').value.toLowerCase(); 
-            adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).forEach(t => {
-                csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`;
-            });
-            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
-        }
+        function adminExportTasks() { let csv = "AssignedDate,Rep,Customer,Detail,Status\n"; const f = document.getElementById('adminTaskFilter').value.toLowerCase(); adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).forEach(t => csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`); const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click(); }
 
         // ================= SALES REP FUNCTIONS =================
         function getCustomerStats(custId) {
@@ -607,7 +539,7 @@
         async function loadAssignedTasksForRep() { const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get(); adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() })); }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
-        // ★★★ 2. 修复：恢复 Assigned Task 弹窗内的 Plus/Check 按钮 ★★★
+        // 4. Restored + and Check buttons
         function renderAcceptTasks() { 
             const container = document.getElementById('acceptTaskList'); const noMsg = document.getElementById('noAssignedTasksMsg'); container.innerHTML = '';
             if (adminTasks.length === 0) { noMsg.classList.remove('hidden'); return; } noMsg.classList.add('hidden');
@@ -650,17 +582,146 @@
         function searchRepCust(inp, id) { const val = inp.value.toLowerCase(); const box = inp.nextElementSibling; if(val.length<1) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden'); myCustomers.filter(c=>c.name.toLowerCase().includes(val)).slice(0,5).forEach(c=>{ const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name; d.onclick=()=>{ inp.value=c.name; inp.parentElement.querySelector('.r-id').value=c.id; inp.parentElement.querySelector('.r-nm').value=c.name; box.classList.add('hidden'); }; box.appendChild(d); }); }
         async function submitReport() { const batch = db.batch(); let hasData=false; document.querySelectorAll('.r-id').forEach(el => { const nm = el.parentElement.querySelector('.r-nm').value; const nt = el.parentElement.parentElement.parentElement.querySelector('.r-note').value; if(nm && nt) { batch.set(db.collection('reports').doc(), { date: new Date().toISOString(), customerId: el.value, customerName: nm, note: nt, repCode: currentUser.code, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); hasData=true; } }); if(!hasData) return alert("Fill data"); await batch.commit(); alert('Sent'); closeReportModal(); }
 
-        // ================= PRODUCT & PDF FUNCTIONS =================
+        // ================= 3. PRODUCT & REQUEST WORKFLOW =================
         function openProductPage() { document.getElementById('productSearchPage').classList.remove('hidden'); }
         function closeProductPage() { document.getElementById('productSearchPage').classList.add('hidden'); resetRequestButton(); }
+
+        // ★★★ 2. Re-Added Request History Sidebar (from 10.0 requirement) ★★★
+        function toggleRequestSidebar() {
+            const sidebar = document.getElementById('requestSidebar');
+            if (sidebar.classList.contains('req-sidebar-closed')) {
+                sidebar.classList.remove('req-sidebar-closed');
+                sidebar.classList.add('req-sidebar-open');
+                renderRequestHistory();
+            } else {
+                sidebar.classList.add('req-sidebar-closed');
+                sidebar.classList.remove('req-sidebar-open');
+            }
+        }
+
+        function listenForHistory() {
+            if(!currentUser || currentUser.isAdmin) return;
+            // Listen for all my requests
+            db.collection('pdf_requests')
+              .where('repCode', '==', currentUser.code)
+              .orderBy('timestamp', 'desc')
+              .onSnapshot(snapshot => {
+                  let html = '';
+                  if (snapshot.empty) {
+                      html = '<div class="text-center text-gray-400 mt-4 text-xs">No history yet.</div>';
+                  } else {
+                      snapshot.forEach(doc => {
+                          const data = doc.data();
+                          let statusBadge = '';
+                          let actionBtn = '';
+                          
+                          if(data.status === 'pending') statusBadge = '<span class="text-xs bg-yellow-100 text-yellow-800 px-2 rounded">Pending</span>';
+                          if(data.status === 'rejected') statusBadge = '<span class="text-xs bg-red-100 text-red-800 px-2 rounded">Rejected</span>';
+                          if(data.status === 'approved') {
+                              statusBadge = '<span class="text-xs bg-green-100 text-green-800 px-2 rounded">Ready</span>';
+                              actionBtn = `<button onclick="downloadPdfFromHistory('${data.query}')" class="text-blue-600 hover:underline text-xs ml-2"><i class="fa-solid fa-download"></i></button>`;
+                          }
+
+                          html += `
+                            <div class="bg-white p-3 rounded shadow-sm border mb-2">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="font-bold text-sm text-gray-700">${data.query}</span>
+                                    ${statusBadge}
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] text-gray-400">${data.timestamp ? new Date(data.timestamp.seconds*1000).toLocaleDateString() : ''}</span>
+                                    ${actionBtn}
+                                </div>
+                            </div>`;
+                      });
+                  }
+                  document.getElementById('myRequestList').innerHTML = html;
+              });
+        }
+        
+        function renderRequestHistory() {
+            // Already handled by listener, just open
+        }
+
+        // Logic to download from history (re-generates PDF)
+        function downloadPdfFromHistory(query) {
+            // reuse logic but headless
+            const searchTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            let forceNew = (query.toLowerCase() === 'new');
+            let forceOld = (query.toLowerCase() === 'old');
+
+            const filtered = allProductData.filter(p => {
+                if (forceNew) return p.isNew === '1' && p.stock > 0;
+                if (forceOld) return p.isNew === '2' && p.stock > 0;
+                const productString = (p.name + " " + p.code).toLowerCase();
+                return searchTerms.every(term => productString.includes(term)) && p.stock > 0;
+            });
+
+            if(filtered.length === 0) return alert("Data mismatch. Cannot regenerate.");
+            
+            // Temporary global set for generator
+            currentProductResults = filtered; 
+            // Mock input for title generation
+            const mockInput = document.createElement('input'); 
+            mockInput.value = query;
+            document.body.appendChild(mockInput);
+            
+            // Generate
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const now = new Date();
+            const safeQuery = query.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase(); 
+            const fileName = `${safeQuery}_${now.toISOString().slice(0,10)}.pdf`;
+
+            doc.setFontSize(18); doc.text("Product Availability List", 14, 20);
+            doc.setFontSize(10); doc.text(`Generated by: ${currentUser ? currentUser.name : 'Guest'}`, 14, 28);
+            doc.text(`Search: ${query}`, 14, 33); doc.text(`Date: ${now.toLocaleString()}`, 14, 38);
+
+            const tableData = filtered.map(p => {
+                let pName = p.name;
+                if (!forceNew && p.isNew === '1') { pName += " (New Arrivals)"; }
+                let displayPrice = (p.promo && p.promo !== "0") ? p.promo : p.price;
+                return [String(p.code), String(pName), String(displayPrice)];
+            });
+
+            doc.autoTable({
+                startY: 45, head: [['Code', 'Product Name', 'Price']], body: tableData,
+                theme: 'striped', headStyles: { fillColor: [30, 58, 138] }, rowPageBreak: 'avoid',
+                styles: { fontSize: 10, cellPadding: 3, overflow: 'linebreak' }, columnStyles: { 0: { cellWidth: 35 }, 2: { cellWidth: 35 } }
+            });
+
+            doc.save(fileName); 
+            document.body.removeChild(mockInput);
+        }
+
+        function listenForPdfStatus() {
+            if(!currentUser || currentUser.isAdmin) return;
+            db.collection('pdf_requests')
+              .where('repCode', '==', currentUser.code)
+              .where('status', 'in', ['pending', 'approved', 'rejected'])
+              .onSnapshot(snapshot => {
+                  snapshot.docChanges().forEach(change => {
+                      if (change.type === "added" || change.type === "modified") {
+                          const data = change.doc.data();
+                          const currentInput = document.getElementById('productSearchInput').value;
+                          if (data.query === currentInput) updateButtonState(data.status);
+                      }
+                  });
+              });
+        }
 
         function handleProductSearch(val) {
             resetRequestButton(); 
             const container = document.getElementById('productResultsContainer');
             if (!val || val.length < 2) { currentProductResults = []; container.innerHTML = `<div class="text-center text-gray-400 mt-10"><i class="fa-solid fa-magnifying-glass text-4xl mb-3"></i><p>Type to search.</p></div>`; return; }
             
-            const searchTerms = val.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            // 5. New/Old Search Logic
+            let searchTerms = []; let forceNew = false; let forceOld = false;
+            if (val.toLowerCase() === 'new') { forceNew = true; } else if (val.toLowerCase() === 'old') { forceOld = true; } else { searchTerms = val.toLowerCase().split(/\s+/).filter(t => t.length > 0); }
+
             currentProductResults = allProductData.filter(p => {
+                if (forceNew) return p.isNew === '1' && p.stock > 0;
+                if (forceOld) return p.isNew === '2' && p.stock > 0;
                 const productString = (p.name + " " + p.code).toLowerCase();
                 return searchTerms.every(term => productString.includes(term)) && p.stock > 0;
             });
@@ -668,9 +729,8 @@
             document.getElementById('productCountBadge').innerText = `${currentProductResults.length} found`;
             checkExistingRequest(val);
 
-            // ★★★ 1. Render List with Promo Price & New Badge ★★★
+            // 1. Promo Price Logic Implementation
             container.innerHTML = currentProductResults.length === 0 ? `<div class="text-center text-gray-400 mt-10"><p>No results.</p></div>` : currentProductResults.map(p => {
-                // Price Display Logic
                 let priceHtml = `<div class="text-xl font-bold text-primary">${p.price}</div>`;
                 if (p.promo && p.promo !== "0" && p.promo !== "") {
                     priceHtml = `
@@ -760,15 +820,14 @@
 
             const isFullNewSearch = (query.toLowerCase() === 'new');
             
-            // ★★★ 1. PDF Data mapping (Use Promo Price if available) ★★★
+            // ★★★ 1. PDF Data mapping (Use Promo Price) ★★★
             const tableData = currentProductResults.map(p => {
                 let pName = p.name;
                 if (!isFullNewSearch && p.isNew === '1') { pName += " (New Arrivals)"; }
                 
-                // Determine which price to show in PDF
                 let displayPrice = p.price;
                 if (p.promo && p.promo !== "0" && p.promo !== "") {
-                    displayPrice = p.promo; // Use promo price in PDF column
+                    displayPrice = p.promo; 
                 }
 
                 return [String(p.code), String(pName), String(displayPrice)];
