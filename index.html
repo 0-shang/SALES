@@ -72,7 +72,6 @@
     </script>
     
     <style>
-        /* ★★★ 1. 修复白屏：默认深蓝背景，JS加载完切回灰色 ★★★ */
         body { background-color: #1e3a8a; overflow: hidden; } 
         body.loaded { background-color: #f3f4f6; } 
 
@@ -380,22 +379,16 @@
         let globalHistory = []; 
         let adminTasks = [];
         let adminExportLogs = []; 
-        let activePdfRequest = null;
-        let currentPdfBlobUrl = null;
         
-        // ★★★ 3. 修复：恢复销售员名单，防止 Assign 页面为空 ★★★
-        const repDirectory = {
-            "10543": "Beny", "10882": "Prince", "10989": "Abigail", "11006": "Hilda", "11029": "Linda"
-        };
+        let repDirectory = {};
 
         window.onload = function() {
-            // ★★★ 1. 修复：纯CSS背景方案，仅在加载完成后切回灰色，无Splash图片 ★★★
             setTimeout(() => {
                 const saved = localStorage.getItem('salesMasterUser');
                 if(!saved) {
                     document.getElementById('loginSection').classList.remove('hidden');
                 } else {
-                    document.body.classList.add('loaded'); // 切回灰色背景
+                    document.body.classList.add('loaded');
                 }
             }, 100);
 
@@ -430,12 +423,112 @@
             } catch (e) { console.error(e); } 
         }
 
-        function loadCSV() { Papa.parse("customers.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { allSalesData = results.data.map(item => ({ id: (item.Code||item.code||"").trim(), name: (item.Name||item.name||"Unknown").trim(), csvRepName: (item.RepName||item.repname||"Sales").trim(), repCode: (item.Limit||item.limit||"").trim().toUpperCase(), phone: (item.Phone||item.phone||"").trim(), credit: (item.Credit||item.credit||"0").trim() })); } }); }
-        function loadProductCSV() { Papa.parse("products.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { allProductData = results.data.map(item => ({ code: (item.Code||item.code||"").trim(), name: (item.Name||item.name||"").trim(), stock: parseFloat(item.Stock||item.stock||"0"), price: (item.Price||item.price||"0").trim(), promo: (item.PromoPrice||item.promoprice||"").trim(), isNew: (item.New||item.new||"0").trim() })); } }); }
+        // 3. Dynamic Rep Directory Construction
+        function loadCSV() { 
+            Papa.parse("customers.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { 
+                allSalesData = results.data.map(item => {
+                    const rCode = (item.Limit||item.limit||"").trim().toUpperCase();
+                    const rName = (item.RepName||item.repname||"Sales").trim();
+                    // Build directory dynamically
+                    if(rCode && rName) repDirectory[rCode] = rName;
+                    
+                    return { 
+                        id: (item.Code||item.code||"").trim(), 
+                        name: (item.Name||item.name||"Unknown").trim(), 
+                        csvRepName: rName, 
+                        repCode: rCode, 
+                        phone: (item.Phone||item.phone||"").trim(), 
+                        credit: (item.Credit||item.credit||"0").trim() 
+                    };
+                }); 
+            }}); 
+        }
+        
+        function loadProductCSV() { 
+            Papa.parse("products.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { 
+                allProductData = results.data.map(item => ({ 
+                    code: (item.Code||item.code||"").trim(), 
+                    name: (item.Name||item.name||"").trim(), 
+                    stock: parseFloat(item.Stock||item.stock||"0"), 
+                    price: (item.Price||item.price||"0").trim(),
+                    promo: (item.PromoPrice||item.promoprice||"").trim(), 
+                    isNew: (item.New||item.new||"0").trim() 
+                })); 
+            }}); 
+        }
 
-        async function performLogin(silent = false) { const code = document.getElementById('loginRepCode').value.trim(); const pass = document.getElementById('loginPassword').value.trim(); const status = document.getElementById('loginStatus'); const btn = document.getElementById('btnLogin'); if (!silent) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin animate-spin"></i> Checking...'; btn.classList.add('btn-loading'); } if (!silent) await new Promise(r => setTimeout(r, 50)); if (code.toLowerCase() === 'admin' && pass === '8888') { currentUser = { code: 'admin', name: 'Administrator', isAdmin: true }; localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); await refreshData(); document.getElementById('loginSection').classList.add('hidden'); document.getElementById('adminSection').classList.remove('hidden'); document.body.classList.add('loaded'); addAssignRow(); initAdminReportFilters(); if(!silent) resetLoginBtn(); return; } if (pass !== '0000') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; } const customers = allSalesData.filter(c => c.repCode == code); if (customers.length === 0) { if (allSalesData.length === 0 && !silent) { status.innerText = "Data syncing... try again."; status.classList.remove('hidden'); resetLoginBtn(); return; } if(document.activeElement.id === 'loginRepCode' && !silent) { status.innerText = "Code not found"; status.classList.remove('hidden'); } if(!silent) resetLoginBtn(); return; } myCustomers = customers; let finalName = repDirectory[code] || customers[0].csvRepName; currentUser = { code: code, name: finalName, isAdmin: false }; localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); await refreshData(); document.getElementById('loginSection').classList.add('hidden'); document.getElementById('appSection').classList.remove('hidden'); document.body.classList.add('loaded'); document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; listenForPdfStatus(); if(!silent) resetLoginBtn(); }
-        function resetLoginBtn() { const btn = document.getElementById('btnLogin'); btn.innerHTML = 'LOGIN'; btn.classList.remove('btn-loading'); }
-        function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; document.body.classList.remove('loaded'); }
+        async function performLogin(silent = false) { 
+            const code = document.getElementById('loginRepCode').value.trim(); 
+            const pass = document.getElementById('loginPassword').value.trim(); 
+            const status = document.getElementById('loginStatus'); 
+            const btn = document.getElementById('btnLogin');
+
+            if (!silent) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin animate-spin"></i> Checking...';
+                btn.classList.add('btn-loading');
+            }
+
+            if (!silent) await new Promise(r => setTimeout(r, 50));
+
+            if (code.toLowerCase() === 'admin' && pass === '8888') { 
+                currentUser = { code: 'admin', name: 'Administrator', isAdmin: true }; 
+                localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
+                await refreshData(); 
+                document.getElementById('loginSection').classList.add('hidden'); 
+                document.getElementById('adminSection').classList.remove('hidden'); 
+                document.body.classList.add('loaded');
+                addAssignRow(); initAdminReportFilters(); 
+                if(!silent) resetLoginBtn();
+                return; 
+            } 
+            
+            if (pass !== '0000') { 
+                if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); }
+                return; 
+            } 
+            
+            const customers = allSalesData.filter(c => c.repCode == code); 
+            if (customers.length === 0) { 
+                if (allSalesData.length === 0 && !silent) {
+                     status.innerText = "Data syncing... try again."; status.classList.remove('hidden'); resetLoginBtn(); return;
+                }
+                if(document.activeElement.id === 'loginRepCode' && !silent) { 
+                    status.innerText = "Code not found"; status.classList.remove('hidden'); 
+                } 
+                if(!silent) resetLoginBtn();
+                return; 
+            } 
+            
+            myCustomers = customers; 
+            let finalName = repDirectory[code] || customers[0].csvRepName; 
+            currentUser = { code: code, name: finalName, isAdmin: false }; 
+            localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
+            
+            await refreshData(); 
+            document.getElementById('loginSection').classList.add('hidden'); 
+            document.getElementById('appSection').classList.remove('hidden'); 
+            document.body.classList.add('loaded'); 
+            document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; 
+            listenForPdfStatus();
+            if(!silent) resetLoginBtn();
+        }
+
+        function resetLoginBtn() {
+            const btn = document.getElementById('btnLogin');
+            btn.innerHTML = 'LOGIN';
+            btn.classList.remove('btn-loading');
+        }
+        
+        function logout() { 
+            localStorage.removeItem('salesMasterUser'); 
+            currentUser = null;
+            document.getElementById('appSection').classList.add('hidden');
+            document.getElementById('adminSection').classList.add('hidden');
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('loginRepCode').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.body.classList.remove('loaded');
+        }
 
         // ================= ADMIN FUNCTIONS =================
         async function loadAllDataForAdmin() {
@@ -449,15 +542,30 @@
         function switchAdminTab(tab) { ['assign','history','reports','exports'].forEach(t => { document.getElementById(`adminTab${t.charAt(0).toUpperCase()+t.slice(1)}`).classList.add('hidden'); document.getElementById(`btnTab${t.charAt(0).toUpperCase()+t.slice(1)}`).className = "flex-1 py-3 hover:bg-blue-700 text-gray-300"; }); document.getElementById(`adminTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.remove('hidden'); document.getElementById(`btnTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).className = "flex-1 py-3 hover:bg-blue-700 text-accent font-bold border-b-2 border-accent"; if(tab === 'reports') { initAdminReportFilters(); renderAdminReports(); } if(tab === 'exports') { renderAdminRequests(); } }
         function initAdminReportFilters() { const sel = document.getElementById('adminReportRepFilter'); if(sel.options.length > 1) return; for (const [code, name] of Object.entries(repDirectory)) sel.innerHTML += `<option value="${code}">${name} (${code})</option>`; }
         function renderAdminReports() { const dateVal = document.getElementById('adminReportDateFilter').value; const repVal = document.getElementById('adminReportRepFilter').value; const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase(); const tbody = document.getElementById('adminReportTableBody'); const mobileContainer = document.getElementById('adminReportMobileList'); tbody.innerHTML = ''; mobileContainer.innerHTML = ''; globalHistory.filter(r => { let matchDate = true; if (dateVal) { const rDate = new Date(r.date); const filterDate = new Date(dateVal); matchDate = (rDate.toDateString() === filterDate.toDateString()); } let matchRep = true; if (repVal) matchRep = (r.repCode === repVal); let matchText = true; if (textVal) matchText = (r.customerName && r.customerName.toLowerCase().includes(textVal)); return matchDate && matchRep && matchText; }).forEach(r => { const dateStr = new Date(r.date).toLocaleDateString(); const repName = repDirectory[r.repCode] || r.repCode; tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-3">${dateStr}</td><td class="p-3 font-bold">${repName}</td><td class="p-3">${r.customerName}</td><td class="p-3 text-gray-600">${r.note}</td></tr>`; mobileContainer.innerHTML += `<div class="bg-white p-3 rounded shadow border-l-4 border-gray-500 mb-2"><div class="flex justify-between items-center mb-1"><span class="font-bold text-gray-800">${repName}</span><span class="text-xs text-gray-400">${dateStr}</span></div><div class="text-sm font-bold text-primary mb-1">${r.customerName}</div><div class="text-sm text-gray-600 bg-gray-50 p-2 rounded">${r.note}</div></div>`; }); }
-        function adminExportReports() {
-            let csv = "Date,Rep,Customer,Note\n"; const dateVal = document.getElementById('adminReportDateFilter').value; const repVal = document.getElementById('adminReportRepFilter').value; const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase();
-            globalHistory.filter(r => { let matchDate = true; if (dateVal) { const rDate = new Date(r.date); const fDate = new Date(dateVal); matchDate = (rDate.toDateString() === fDate.toDateString()); } let matchRep = true; if (repVal) matchRep = (r.repCode === repVal); let matchText = true; if (textVal) matchText = (r.customerName && r.customerName.toLowerCase().includes(textVal)); return matchDate && matchRep && matchText; }).forEach(r => csv += `${new Date(r.date).toLocaleDateString()},${repDirectory[r.repCode] || r.repCode},${r.customerName},"${r.note}"\n`);
-            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
-        }
+        
+        // ★★★ 修复 Admin Requests 显示问题 ★★★
         async function renderAdminRequests() {
-            const list = document.getElementById('adminRequestList'); list.innerHTML = '<div class="text-center"><div class="spinner"></div></div>'; const snap = await db.collection('pdf_requests').where('status', '==', 'pending').orderBy('timestamp', 'desc').limit(50).get(); list.innerHTML = '';
-            if (snap.empty) { list.innerHTML = '<div class="text-gray-400 text-center p-4">No pending requests.</div>'; return; }
-            snap.forEach(doc => { const req = doc.data(); const ts = req.timestamp ? req.timestamp.toDate().toLocaleTimeString() : 'Just now'; list.innerHTML += `<div class="bg-white p-4 rounded shadow border-l-4 border-orange-400 flex justify-between items-center"><div><div class="font-bold text-gray-800">${req.repName} <span class="text-xs text-gray-400 font-normal">(${ts})</span></div><div class="text-sm text-gray-600">Requesting: <span class="font-mono bg-gray-100 px-1 rounded">${req.query}</span></div></div><div class="flex space-x-3"><button onclick="adminRejectRequest('${doc.id}')" class="bg-red-100 text-red-600 w-10 h-10 rounded-full hover:bg-red-200"><i class="fa-solid fa-times"></i></button><button onclick="adminApproveRequest('${doc.id}')" class="bg-green-100 text-green-600 w-10 h-10 rounded-full hover:bg-green-200"><i class="fa-solid fa-check"></i></button></div></div>`; });
+            const list = document.getElementById('adminRequestList');
+            list.innerHTML = '<div class="text-center"><div class="spinner"></div></div>';
+            // 移除 orderBy 避免索引问题
+            const snap = await db.collection('pdf_requests').where('status', '==', 'pending').get(); 
+            list.innerHTML = '';
+            
+            let requests = [];
+            snap.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+            // 内存排序
+            requests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+            if (requests.length === 0) { list.innerHTML = '<div class="text-gray-400 text-center p-4">No pending requests.</div>'; return; }
+            
+            requests.forEach(req => {
+                const ts = req.timestamp ? new Date(req.timestamp.seconds * 1000).toLocaleTimeString() : 'Just now';
+                list.innerHTML += `
+                    <div class="bg-white p-4 rounded shadow border-l-4 border-orange-400 flex justify-between items-center">
+                        <div><div class="font-bold text-gray-800">${req.repName} <span class="text-xs text-gray-400 font-normal">(${ts})</span></div><div class="text-sm text-gray-600">Requesting: <span class="font-mono bg-gray-100 px-1 rounded">${req.query}</span></div></div>
+                        <div class="flex space-x-3"><button onclick="adminRejectRequest('${req.id}')" class="bg-red-100 text-red-600 w-10 h-10 rounded-full hover:bg-red-200"><i class="fa-solid fa-times"></i></button><button onclick="adminApproveRequest('${req.id}')" class="bg-green-100 text-green-600 w-10 h-10 rounded-full hover:bg-green-200"><i class="fa-solid fa-check"></i></button></div>
+                    </div>`;
+            });
         }
         async function adminApproveRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'approved'}); renderAdminRequests(); }
         async function adminRejectRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'rejected'}); renderAdminRequests(); }
@@ -467,7 +575,14 @@
         async function adminSubmitBulkTasks() { const rows = document.querySelectorAll('.assign-row'); const batch = db.batch(); let count = 0; rows.forEach(row => { const cbs = row.querySelectorAll('.assign-rep-checkbox:checked'); const cid = row.querySelector('.assign-cust-id').value; const cnm = row.querySelector('.assign-cust-name').value; const nt = row.querySelector('.assign-note').value; if(cbs.length && cid && nt) { cbs.forEach(cb => { const ref = db.collection('admin_tasks').doc(); batch.set(ref, { repCode: cb.value, repName: repDirectory[cb.value], customerId: cid, customerName: cnm, taskDetail: nt, status: 'pending', assignedDate: new Date().toLocaleDateString(), timestamp: firebase.firestore.FieldValue.serverTimestamp() }); count++; }); } }); if(count>0) { await batch.commit(); alert('Tasks Assigned'); document.getElementById('assignRowsContainer').innerHTML = ''; addAssignRow(); } }
         function renderAdminTasks() { const f = document.getElementById('adminTaskFilter').value.toLowerCase(); document.getElementById('adminTaskList').innerHTML = adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).map(t => `<div class="p-3 rounded border flex justify-between items-center ${t.status==='completed'?'bg-green-50':'bg-white'}"><div><div class="font-bold text-gray-800">${t.repName} -> ${t.customerName}</div><div class="text-xs text-gray-500">${t.assignedDate} | ${t.taskDetail}</div></div>${t.status==='completed'?'':`<button onclick="adminRestoreTask('${t.docId}')" class="text-red-500 text-xs">Delete</button>`}</div>`).join(''); }
         async function adminRestoreTask(id) { if(confirm('Delete?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
-        function adminExportTasks() { let csv = "AssignedDate,Rep,Customer,Detail,Status\n"; const f = document.getElementById('adminTaskFilter').value.toLowerCase(); adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).forEach(t => csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`); const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click(); }
+        function adminExportTasks() {
+            let csv = "AssignedDate,Rep,Customer,Detail,Status\n";
+            const f = document.getElementById('adminTaskFilter').value.toLowerCase(); 
+            adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).forEach(t => {
+                csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`;
+            });
+            const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
+        }
 
         // ================= SALES REP FUNCTIONS =================
         function getCustomerStats(custId) {
@@ -535,38 +650,17 @@
         function searchRepCust(inp, id) { const val = inp.value.toLowerCase(); const box = inp.nextElementSibling; if(val.length<1) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden'); myCustomers.filter(c=>c.name.toLowerCase().includes(val)).slice(0,5).forEach(c=>{ const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name; d.onclick=()=>{ inp.value=c.name; inp.parentElement.querySelector('.r-id').value=c.id; inp.parentElement.querySelector('.r-nm').value=c.name; box.classList.add('hidden'); }; box.appendChild(d); }); }
         async function submitReport() { const batch = db.batch(); let hasData=false; document.querySelectorAll('.r-id').forEach(el => { const nm = el.parentElement.querySelector('.r-nm').value; const nt = el.parentElement.parentElement.parentElement.querySelector('.r-note').value; if(nm && nt) { batch.set(db.collection('reports').doc(), { date: new Date().toISOString(), customerId: el.value, customerName: nm, note: nt, repCode: currentUser.code, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); hasData=true; } }); if(!hasData) return alert("Fill data"); await batch.commit(); alert('Sent'); closeReportModal(); }
 
-        // ================= 3. PRODUCT & REQUEST WORKFLOW =================
+        // ================= PRODUCT & PDF FUNCTIONS =================
         function openProductPage() { document.getElementById('productSearchPage').classList.remove('hidden'); }
         function closeProductPage() { document.getElementById('productSearchPage').classList.add('hidden'); resetRequestButton(); }
-
-        function listenForPdfStatus() {
-            if(!currentUser || currentUser.isAdmin) return;
-            db.collection('pdf_requests')
-              .where('repCode', '==', currentUser.code)
-              .where('status', 'in', ['pending', 'approved', 'rejected'])
-              .onSnapshot(snapshot => {
-                  snapshot.docChanges().forEach(change => {
-                      if (change.type === "added" || change.type === "modified") {
-                          const data = change.doc.data();
-                          const currentInput = document.getElementById('productSearchInput').value;
-                          if (data.query === currentInput) updateButtonState(data.status);
-                      }
-                  });
-              });
-        }
 
         function handleProductSearch(val) {
             resetRequestButton(); 
             const container = document.getElementById('productResultsContainer');
             if (!val || val.length < 2) { currentProductResults = []; container.innerHTML = `<div class="text-center text-gray-400 mt-10"><i class="fa-solid fa-magnifying-glass text-4xl mb-3"></i><p>Type to search.</p></div>`; return; }
             
-            // 5. New/Old Search Logic
-            let searchTerms = []; let forceNew = false; let forceOld = false;
-            if (val.toLowerCase() === 'new') { forceNew = true; } else if (val.toLowerCase() === 'old') { forceOld = true; } else { searchTerms = val.toLowerCase().split(/\s+/).filter(t => t.length > 0); }
-
+            const searchTerms = val.toLowerCase().split(/\s+/).filter(t => t.length > 0);
             currentProductResults = allProductData.filter(p => {
-                if (forceNew) return p.isNew === '1' && p.stock > 0;
-                if (forceOld) return p.isNew === '2' && p.stock > 0;
                 const productString = (p.name + " " + p.code).toLowerCase();
                 return searchTerms.every(term => productString.includes(term)) && p.stock > 0;
             });
@@ -574,8 +668,9 @@
             document.getElementById('productCountBadge').innerText = `${currentProductResults.length} found`;
             checkExistingRequest(val);
 
-            // 1. Promo Price Logic Implementation
+            // ★★★ 1. Render List with Promo Price & New Badge ★★★
             container.innerHTML = currentProductResults.length === 0 ? `<div class="text-center text-gray-400 mt-10"><p>No results.</p></div>` : currentProductResults.map(p => {
+                // Price Display Logic
                 let priceHtml = `<div class="text-xl font-bold text-primary">${p.price}</div>`;
                 if (p.promo && p.promo !== "0" && p.promo !== "") {
                     priceHtml = `
@@ -665,14 +760,15 @@
 
             const isFullNewSearch = (query.toLowerCase() === 'new');
             
-            // ★★★ 1. PDF Data mapping (Use Promo Price) ★★★
+            // ★★★ 1. PDF Data mapping (Use Promo Price if available) ★★★
             const tableData = currentProductResults.map(p => {
                 let pName = p.name;
                 if (!isFullNewSearch && p.isNew === '1') { pName += " (New Arrivals)"; }
                 
+                // Determine which price to show in PDF
                 let displayPrice = p.price;
                 if (p.promo && p.promo !== "0" && p.promo !== "") {
-                    displayPrice = p.promo; 
+                    displayPrice = p.promo; // Use promo price in PDF column
                 }
 
                 return [String(p.code), String(pName), String(displayPrice)];
