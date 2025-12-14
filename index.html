@@ -368,7 +368,7 @@
         </div>
     </div>
 
-   <script>
+  <script>
         // --- Globals ---
         let allSalesData = [];
         let myCustomers = [];
@@ -382,37 +382,35 @@
         let currentPdfBlobUrl = null;
         let repDirectory = {};
 
-        // ★★★ FIX #1: 优化启动逻辑，解决白屏卡顿 ★★★
-        // 不再等待 window.onload (所有资源加载完)，而在 DOM 准备好后立即执行
-        document.addEventListener('DOMContentLoaded', () => {
-            initApp();
-        });
-
-        function initApp() {
-            // 立即检查本地存储，决定显示哪个界面
-            const saved = localStorage.getItem('salesMasterUser');
-            
-            if(!saved) {
-                // 没有登录：立即显示登录页
-                document.getElementById('loginSection').classList.remove('hidden');
-            } else {
-                // 已登录：先显示背景，稍后填充数据
-                document.body.classList.add('loaded');
-                checkSession(); // 恢复会话
-            }
-
-            // 异步加载非关键资源，不阻塞界面渲染
+        // ★★★ 核心修复：立即启动逻辑，不等待 DOMContentLoaded ★★★
+        (function startApp() {
+            // 1. 立即触发数据加载（不阻塞界面）
             loadCSV();
             loadProductCSV(); 
-            initDraggableListBtn(); 
             
-            // 初始化下拉刷新
-            initPullToRefresh('adminMain', 'adminPullIndicator');
-            initPullToRefresh('salesMain', 'salesPullIndicator');
-        }
+            // 2. 检查用户状态
+            const saved = localStorage.getItem('salesMasterUser');
+            const loginEl = document.getElementById('loginSection');
+            
+            if (!saved) {
+                // 情况A：没有登录 -> 立即强制显示登录框
+                if(loginEl) loginEl.classList.remove('hidden');
+            } else {
+                // 情况B：已登录 -> 尝试自动登录
+                // 先显示背景色表示正在加载
+                document.body.classList.add('loaded');
+                // 稍后执行检查，给 DOM 一点渲染时间
+                setTimeout(checkSession, 50);
+            }
 
-        function initDraggableListBtn() { const btn = document.getElementById('draggableListBtn'); let isDragging = false, startY, startTop; const handleStart = (e) => { isDragging = false; const touch = e.touches ? e.touches[0] : e; startY = touch.clientY; startTop = btn.offsetTop; }; const handleMove = (e) => { const touch = e.touches ? e.touches[0] : e; if (Math.abs(touch.clientY - startY) > 5) isDragging = true; if (isDragging) { e.preventDefault(); let newTop = startTop + (touch.clientY - startY); btn.style.top = Math.max(50, Math.min(window.innerHeight - 80, newTop)) + 'px'; } }; btn.addEventListener('touchstart', handleStart, {passive: false}); btn.addEventListener('touchmove', handleMove, {passive: false}); btn.addEventListener('click', () => { if (!isDragging) openProductPage(); }); }
-        
+            // 3. 初始化其他非关键组件
+            setTimeout(() => {
+                initDraggableListBtn();
+                initPullToRefresh('adminMain', 'adminPullIndicator');
+                initPullToRefresh('salesMain', 'salesPullIndicator');
+            }, 500);
+        })();
+
         // 2. Persistent Login Check
         function checkSession() { 
             const saved = localStorage.getItem('salesMasterUser'); 
@@ -423,8 +421,10 @@
                 performLogin(true); 
             } 
         }
+
+        function initDraggableListBtn() { const btn = document.getElementById('draggableListBtn'); if(!btn) return; let isDragging = false, startY, startTop; const handleStart = (e) => { isDragging = false; const touch = e.touches ? e.touches[0] : e; startY = touch.clientY; startTop = btn.offsetTop; }; const handleMove = (e) => { const touch = e.touches ? e.touches[0] : e; if (Math.abs(touch.clientY - startY) > 5) isDragging = true; if (isDragging) { e.preventDefault(); let newTop = startTop + (touch.clientY - startY); btn.style.top = Math.max(50, Math.min(window.innerHeight - 80, newTop)) + 'px'; } }; btn.addEventListener('touchstart', handleStart, {passive: false}); btn.addEventListener('touchmove', handleMove, {passive: false}); btn.addEventListener('click', () => { if (!isDragging) openProductPage(); }); }
         
-        function initPullToRefresh(containerId, indicatorId) { const container = document.getElementById(containerId); const indicator = document.getElementById(indicatorId); let startY = 0; let isPulling = false; container.addEventListener('touchstart', (e) => { if (container.scrollTop === 0) { startY = e.touches[0].clientY; isPulling = true; } }); container.addEventListener('touchmove', (e) => { if (!isPulling) return; const y = e.touches[0].clientY; const diff = y - startY; if (diff > 0 && diff < 200 && container.scrollTop === 0) { indicator.style.height = `${diff / 3}px`; } }); container.addEventListener('touchend', (e) => { if (!isPulling) return; isPulling = false; const endY = e.changedTouches[0].clientY; if (endY - startY > 80 && container.scrollTop === 0) { indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...'; indicator.style.height = '50px'; refreshData().then(() => { setTimeout(() => { indicator.style.height = '0px'; indicator.innerHTML = '<i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh'; }, 500); }); } else { indicator.style.height = '0px'; } }); }
+        function initPullToRefresh(containerId, indicatorId) { const container = document.getElementById(containerId); const indicator = document.getElementById(indicatorId); if(!container || !indicator) return; let startY = 0; let isPulling = false; container.addEventListener('touchstart', (e) => { if (container.scrollTop === 0) { startY = e.touches[0].clientY; isPulling = true; } }); container.addEventListener('touchmove', (e) => { if (!isPulling) return; const y = e.touches[0].clientY; const diff = y - startY; if (diff > 0 && diff < 200 && container.scrollTop === 0) { indicator.style.height = `${diff / 3}px`; } }); container.addEventListener('touchend', (e) => { if (!isPulling) return; isPulling = false; const endY = e.changedTouches[0].clientY; if (endY - startY > 80 && container.scrollTop === 0) { indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...'; indicator.style.height = '50px'; refreshData().then(() => { setTimeout(() => { indicator.style.height = '0px'; indicator.innerHTML = '<i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh'; }, 500); }); } else { indicator.style.height = '0px'; } }); }
         
         async function refreshData() { 
             if (!currentUser) return; 
@@ -491,6 +491,7 @@
 
             if (!silent) await new Promise(r => setTimeout(r, 50));
 
+            // Admin Logic
             if (code.toLowerCase() === 'admin' && pass === '8888') { 
                 currentUser = { code: 'admin', name: 'Administrator', isAdmin: true }; 
                 localStorage.setItem('salesMasterUser', JSON.stringify(currentUser));
@@ -508,11 +509,23 @@
                 return; 
             } 
             
+            // ★★★ FIX: 数据加载等待循环 ★★★
+            // 如果是自动登录(silent)，但CSV还没下载完(allSalesData为空)，则不报错，而是等待200ms后重试
+            // 这解决了白屏问题
+            if (allSalesData.length === 0) {
+                if(silent) {
+                    setTimeout(() => performLogin(true), 200);
+                    return;
+                } else {
+                    status.innerText = "Syncing data... please wait."; 
+                    status.classList.remove('hidden'); 
+                    resetLoginBtn(); 
+                    return;
+                }
+            }
+
             const customers = allSalesData.filter(c => c.repCode == code); 
             if (customers.length === 0) { 
-                if (allSalesData.length === 0 && !silent) {
-                     status.innerText = "Data syncing... try again."; status.classList.remove('hidden'); resetLoginBtn(); return;
-                }
                 if(document.activeElement.id === 'loginRepCode' && !silent) { 
                     status.innerText = "Code not found"; status.classList.remove('hidden'); 
                 } 
@@ -704,16 +717,16 @@
         async function loadAssignedTasksForRep() { const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get(); adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() })); }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
-        // ★★★ FIX #2: 分离按钮（加号 + 对号）★★★
+        // ★★★ 任务按钮更新：加号和对号 ★★★
         function renderAcceptTasks() { 
             const list = document.getElementById('acceptTaskList');
             const noMsg = document.getElementById('noAssignedTasksMsg');
             
             if(adminTasks.length === 0) {
                 list.innerHTML = '';
-                noMsg.classList.remove('hidden');
+                if(noMsg) noMsg.classList.remove('hidden');
             } else {
-                noMsg.classList.add('hidden');
+                if(noMsg) noMsg.classList.add('hidden');
                 list.innerHTML = adminTasks.map(t => `
                     <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 flex justify-between items-center border border-gray-100">
                         <div class="flex-1">
@@ -721,11 +734,11 @@
                             <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-circle-info mr-1 text-blue-400"></i>${t.taskDetail}</div>
                         </div>
                         <div class="flex items-center space-x-3 ml-2">
-                            <!-- Button 1: Add to Today's Plan -->
+                            <!-- 按钮 1: 添加到今日计划 (蓝色加号) -->
                             <button onclick="addTaskToToday('${t.docId}','${t.customerId}')" class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-600 hover:text-white transition shadow flex items-center justify-center" title="Add to Plan">
                                 <i class="fa-solid fa-plus"></i>
                             </button>
-                            <!-- Button 2: Just Mark as Done (Read) -->
+                            <!-- 按钮 2: 仅标记为已读 (绿色对号) -->
                             <button onclick="completeAssignedTask('${t.docId}')" class="w-10 h-10 rounded-full bg-green-100 text-green-600 hover:bg-green-600 hover:text-white transition shadow flex items-center justify-center" title="Mark as Read">
                                 <i class="fa-solid fa-check"></i>
                             </button>
@@ -737,8 +750,10 @@
 
         function updateAssignedBadge() {
             const badge = document.getElementById('assignedCountBadge');
-            badge.innerText = adminTasks.length; 
-            if(adminTasks.length > 0) badge.classList.remove('hidden'); else badge.classList.add('hidden');
+            if(badge) {
+                badge.innerText = adminTasks.length; 
+                if(adminTasks.length > 0) badge.classList.remove('hidden'); else badge.classList.add('hidden');
+            }
         }
 
         function addTaskToToday(did, cid) { 
@@ -747,13 +762,9 @@
         }
         
         async function completeAssignedTask(docId) { 
-            // 动画移除效果
             const el = document.getElementById(`accept-${docId}`);
             if(el) { el.style.opacity = '0.5'; el.style.transform = 'scale(0.95)'; }
-
             await db.collection('admin_tasks').doc(docId).update({ status: 'completed', completedDate: new Date().toISOString() }); 
-            
-            // 本地更新数组，避免刷新
             adminTasks = adminTasks.filter(t => t.docId !== docId); 
             renderAcceptTasks(); 
         }
