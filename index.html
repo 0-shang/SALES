@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 10.0</title>
+    <title>Sales Master Pro 10.1</title>
     
     <!-- ★★★ 图标配置 ★★★ -->
     <script>
@@ -11,7 +11,7 @@
     </script>
 
     <!-- PWA Settings -->
-    <meta name="theme-color" content="#1e3a8a">
+    <meta name="theme-color" content="#1e40af">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Sales Master">
@@ -58,8 +58,8 @@
             "short_name": "SalesMaster",
             "start_url": ".",
             "display": "standalone",
-            "background_color": "#1e3a8a",
-            "theme_color": "#1e3a8a",
+            "background_color": "#1e40af",
+            "theme_color": "#1e40af",
             "orientation": "portrait",
             "icons": [
                 { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
@@ -72,10 +72,11 @@
     </script>
     
     <style>
-        body { background-color: #1e3a8a; overflow: hidden; } 
+        /* 保持深蓝背景修复白屏 */
+        body { background-color: #1e40af; overflow: hidden; } 
         body.loaded { background-color: #f3f4f6; } 
 
-        #loginSection { background-color: #1e3a8a; } 
+        #loginSection { background-color: #1e40af; } 
 
         .login-card {
             background: white; border-radius: 12px; padding: 30px 25px; width: 90%; max-width: 350px;
@@ -86,7 +87,7 @@
             width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; font-size: 14px;
             outline: none; transition: border-color 0.2s; background-color: #fff;
         }
-        .login-input:focus { border-color: #1e3a8a; }
+        .login-input:focus { border-color: #1e40af; }
         .login-input::placeholder { color: #9ca3af; }
 
         .btn-loading { opacity: 0.7; cursor: not-allowed; pointer-events: none; }
@@ -95,7 +96,7 @@
         .sidebar-closed { transform: translateX(100%); }
         .sidebar-open { transform: translateX(0); }
         
-        /* New Request History Sidebar */
+        /* 侧边栏样式 */
         .req-sidebar { transition: transform 0.3s ease-in-out; }
         .req-sidebar-closed { transform: translateX(100%); }
         .req-sidebar-open { transform: translateX(0); }
@@ -222,7 +223,6 @@
                 <div id="adminReportMobileList" class="md:hidden space-y-3"></div>
             </div>
 
-            <!-- Admin PDF Requests Tab -->
             <div id="adminTabExports" class="max-w-6xl mx-auto hidden space-y-4">
                 <div class="bg-white p-4 rounded shadow mb-4">
                     <h3 class="font-bold text-gray-700 mb-2">PDF Approval Queue</h3>
@@ -289,7 +289,6 @@
                 <span class="text-[10px] pointer-events-none">LIST</span>
             </button>
 
-            <!-- Customer Sidebar -->
             <div id="taskSidebar" class="sidebar sidebar-closed fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-40 flex flex-col">
                 <div class="p-4 bg-primary text-white flex justify-between items-center">
                     <h3 class="font-bold">Select Customers</h3>
@@ -402,7 +401,7 @@
         let adminTasks = [];
         let adminExportLogs = []; 
         
-        let repDirectory = {}; // 1. Dynamic Directory
+        let repDirectory = {}; 
 
         window.onload = function() {
             setTimeout(() => {
@@ -445,7 +444,7 @@
             } catch (e) { console.error(e); } 
         }
 
-        // ★★★ 1. Build Rep Directory from CSV ★★★
+        // ★★★ 1. 修复：CSV加载后自动刷新 Admin Select 选项 ★★★
         function loadCSV() { 
             Papa.parse("customers.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { 
                 allSalesData = results.data.map(item => {
@@ -461,7 +460,13 @@
                         phone: (item.Phone||item.phone||"").trim(), 
                         credit: (item.Credit||item.credit||"0").trim() 
                     };
-                }); 
+                });
+                
+                // 如果当前是管理员，加载完CSV后立刻重绘分配行，确保下拉框有数据
+                if(currentUser && currentUser.isAdmin) {
+                    document.getElementById('assignRowsContainer').innerHTML = '';
+                    addAssignRow();
+                }
             }}); 
         }
         function loadProductCSV() { Papa.parse("products.csv", { download: true, header: true, skipEmptyLines: true, complete: function(results) { allProductData = results.data.map(item => ({ code: (item.Code||item.code||"").trim(), name: (item.Name||item.name||"").trim(), stock: parseFloat(item.Stock||item.stock||"0"), price: (item.Price||item.price||"0").trim(), promo: (item.PromoPrice||item.promoprice||"").trim(), isNew: (item.New||item.new||"0").trim() })); } }); }
@@ -488,20 +493,23 @@
             const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Reports_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
         }
         async function renderAdminRequests() {
-            const list = document.getElementById('adminRequestList'); list.innerHTML = '<div class="text-center"><div class="spinner"></div></div>'; const snap = await db.collection('pdf_requests').where('status', '==', 'pending').orderBy('timestamp', 'desc').limit(50).get(); list.innerHTML = '';
-            if (snap.empty) { list.innerHTML = '<div class="text-gray-400 text-center p-4">No pending requests.</div>'; return; }
-            snap.forEach(doc => { const req = doc.data(); const ts = req.timestamp ? req.timestamp.toDate().toLocaleTimeString() : 'Just now'; list.innerHTML += `<div class="bg-white p-4 rounded shadow border-l-4 border-orange-400 flex justify-between items-center"><div><div class="font-bold text-gray-800">${req.repName} <span class="text-xs text-gray-400 font-normal">(${ts})</span></div><div class="text-sm text-gray-600">Requesting: <span class="font-mono bg-gray-100 px-1 rounded">${req.query}</span></div></div><div class="flex space-x-3"><button onclick="adminRejectRequest('${doc.id}')" class="bg-red-100 text-red-600 w-10 h-10 rounded-full hover:bg-red-200"><i class="fa-solid fa-times"></i></button><button onclick="adminApproveRequest('${doc.id}')" class="bg-green-100 text-green-600 w-10 h-10 rounded-full hover:bg-green-200"><i class="fa-solid fa-check"></i></button></div></div>`; });
+            const list = document.getElementById('adminRequestList'); list.innerHTML = '<div class="text-center"><div class="spinner"></div></div>'; const snap = await db.collection('pdf_requests').where('status', '==', 'pending').get(); list.innerHTML = '';
+            
+            let requests = []; snap.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+            requests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)); // Local sort fix
+
+            if (requests.length === 0) { list.innerHTML = '<div class="text-gray-400 text-center p-4">No pending requests.</div>'; return; }
+            requests.forEach(req => { const ts = req.timestamp ? new Date(req.timestamp.seconds*1000).toLocaleTimeString() : 'Just now'; list.innerHTML += `<div class="bg-white p-4 rounded shadow border-l-4 border-orange-400 flex justify-between items-center"><div><div class="font-bold text-gray-800">${req.repName} <span class="text-xs text-gray-400 font-normal">(${ts})</span></div><div class="text-sm text-gray-600">Requesting: <span class="font-mono bg-gray-100 px-1 rounded">${req.query}</span></div></div><div class="flex space-x-3"><button onclick="adminRejectRequest('${req.id}')" class="bg-red-100 text-red-600 w-10 h-10 rounded-full hover:bg-red-200"><i class="fa-solid fa-times"></i></button><button onclick="adminApproveRequest('${req.id}')" class="bg-green-100 text-green-600 w-10 h-10 rounded-full hover:bg-green-200"><i class="fa-solid fa-check"></i></button></div></div>`; });
         }
         async function adminApproveRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'approved'}); renderAdminRequests(); }
         async function adminRejectRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'rejected'}); renderAdminRequests(); }
 
-        // ★★★ 1. Fixed: Iterate dynamic repDirectory instead of empty object ★★★
         function addAssignRow() { 
             const container = document.getElementById('assignRowsContainer'); 
             const rowId = Date.now() + Math.random(); 
             let repCheckboxes = '<div class="h-24 overflow-y-auto border rounded p-2 bg-white">'; 
             
-            // Fix: Ensure we use the populated repDirectory
+            // ★★★ 1. 使用动态目录 repDirectory 渲染复选框 ★★★
             for (const [code, name] of Object.entries(repDirectory)) { 
                 repCheckboxes += `<label class="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded"><input type="checkbox" value="${code}" class="assign-rep-checkbox accent-primary"><span class="text-xs text-gray-700 font-bold">${name}</span></label>`; 
             } 
@@ -513,7 +521,8 @@
         function searchAdminCustInRow(inp, rowId) { const val = inp.value.toLowerCase(); const box = document.getElementById(`res-${rowId}`); if(val.length<2) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden'); allSalesData.filter(c => c.name.toLowerCase().includes(val)).slice(0,10).forEach(c => { const d = document.createElement('div'); d.className = "p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText = `${c.name} (${c.id})`; d.onclick = () => { inp.value = c.name; inp.parentElement.querySelector('.assign-cust-id').value = c.id; inp.parentElement.querySelector('.assign-cust-name').value = c.name; box.classList.add('hidden'); }; box.appendChild(d); }); }
         async function adminSubmitBulkTasks() { const rows = document.querySelectorAll('.assign-row'); const batch = db.batch(); let count = 0; rows.forEach(row => { const cbs = row.querySelectorAll('.assign-rep-checkbox:checked'); const cid = row.querySelector('.assign-cust-id').value; const cnm = row.querySelector('.assign-cust-name').value; const nt = row.querySelector('.assign-note').value; if(cbs.length && cid && nt) { cbs.forEach(cb => { const ref = db.collection('admin_tasks').doc(); batch.set(ref, { repCode: cb.value, repName: repDirectory[cb.value], customerId: cid, customerName: cnm, taskDetail: nt, status: 'pending', assignedDate: new Date().toLocaleDateString(), timestamp: firebase.firestore.FieldValue.serverTimestamp() }); count++; }); } }); if(count>0) { await batch.commit(); alert('Tasks Assigned'); document.getElementById('assignRowsContainer').innerHTML = ''; addAssignRow(); } }
         function renderAdminTasks() { const f = document.getElementById('adminTaskFilter').value.toLowerCase(); document.getElementById('adminTaskList').innerHTML = adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).map(t => `<div class="p-3 rounded border flex justify-between items-center ${t.status==='completed'?'bg-green-50':'bg-white'}"><div><div class="font-bold text-gray-800">${t.repName} -> ${t.customerName}</div><div class="text-xs text-gray-500">${t.assignedDate} | ${t.taskDetail}</div></div>${t.status==='completed'?'':`<button onclick="adminRestoreTask('${t.docId}')" class="text-red-500 text-xs">Delete</button>`}</div>`).join(''); }
-        async function adminRestoreTask(id) { if(confirm('Delete?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
+        async function adminRestoreTask(id) { if(confirm('Undo this task?')) await db.collection('admin_tasks').doc(id).update({status: 'pending'}); refreshData(); }
+        async function adminDeleteTask(id) { if(confirm('Delete task permanently?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
         function adminExportTasks() { let csv = "AssignedDate,Rep,Customer,Detail,Status\n"; const f = document.getElementById('adminTaskFilter').value.toLowerCase(); adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).forEach(t => csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`); const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click(); }
 
         // ================= SALES REP FUNCTIONS =================
@@ -539,7 +548,7 @@
         async function loadAssignedTasksForRep() { const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get(); adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() })); }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
-        // 4. Restored + and Check buttons
+        // ★★★ 3. 修复：恢复 Assigned Task 弹窗内的 Plus/Check 按钮 ★★★
         function renderAcceptTasks() { 
             const container = document.getElementById('acceptTaskList'); const noMsg = document.getElementById('noAssignedTasksMsg'); container.innerHTML = '';
             if (adminTasks.length === 0) { noMsg.classList.remove('hidden'); return; } noMsg.classList.add('hidden');
@@ -592,7 +601,7 @@
             if (sidebar.classList.contains('req-sidebar-closed')) {
                 sidebar.classList.remove('req-sidebar-closed');
                 sidebar.classList.add('req-sidebar-open');
-                renderRequestHistory();
+                listenForHistory(); // Load on open
             } else {
                 sidebar.classList.add('req-sidebar-closed');
                 sidebar.classList.remove('req-sidebar-open');
@@ -601,17 +610,19 @@
 
         function listenForHistory() {
             if(!currentUser || currentUser.isAdmin) return;
-            // Listen for all my requests
+            // Listen for all my requests - Client side sort for history too
             db.collection('pdf_requests')
               .where('repCode', '==', currentUser.code)
-              .orderBy('timestamp', 'desc')
               .onSnapshot(snapshot => {
+                  let requests = [];
+                  snapshot.forEach(doc => requests.push(doc.data()));
+                  requests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
                   let html = '';
-                  if (snapshot.empty) {
+                  if (requests.length === 0) {
                       html = '<div class="text-center text-gray-400 mt-4 text-xs">No history yet.</div>';
                   } else {
-                      snapshot.forEach(doc => {
-                          const data = doc.data();
+                      requests.forEach(data => {
                           let statusBadge = '';
                           let actionBtn = '';
                           
@@ -638,10 +649,6 @@
                   document.getElementById('myRequestList').innerHTML = html;
               });
         }
-        
-        function renderRequestHistory() {
-            // Already handled by listener, just open
-        }
 
         // Logic to download from history (re-generates PDF)
         function downloadPdfFromHistory(query) {
@@ -659,14 +666,7 @@
 
             if(filtered.length === 0) return alert("Data mismatch. Cannot regenerate.");
             
-            // Temporary global set for generator
-            currentProductResults = filtered; 
-            // Mock input for title generation
-            const mockInput = document.createElement('input'); 
-            mockInput.value = query;
-            document.body.appendChild(mockInput);
-            
-            // Generate
+            // Generate PDF Headless
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const now = new Date();
@@ -691,7 +691,6 @@
             });
 
             doc.save(fileName); 
-            document.body.removeChild(mockInput);
         }
 
         function listenForPdfStatus() {
@@ -756,8 +755,19 @@
         }
 
         async function checkExistingRequest(query) {
-            const snap = await db.collection('pdf_requests').where('repCode', '==', currentUser.code).where('query', '==', query).orderBy('timestamp', 'desc').limit(1).get();
-            if (!snap.empty) updateButtonState(snap.docs[0].data().status);
+            // Remove orderBy to avoid index requirement errors
+            const snap = await db.collection('pdf_requests')
+                .where('repCode', '==', currentUser.code)
+                .where('query', '==', query)
+                .get();
+            
+            if (!snap.empty) {
+                // Find most recent locally
+                let docs = [];
+                snap.forEach(d => docs.push(d.data()));
+                docs.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                updateButtonState(docs[0].status);
+            }
         }
 
         function resetRequestButton() {
