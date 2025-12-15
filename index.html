@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 10.8</title>
+    <title>Sales Master Pro 10.9</title>
     
     <!-- ★★★ 图标配置 ★★★ -->
     <script>
@@ -59,7 +59,7 @@
             "start_url": ".",
             "display": "standalone",
             "background_color": "#ffffff",
-            "theme_color": "#1e3a8a",
+            "theme_color": "#1e40af",
             "orientation": "portrait",
             "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }]
         };
@@ -70,10 +70,8 @@
     </script>
     
     <style>
-        /* 1. 恢复默认灰色背景，去除所有启动颜色 */
         body { background-color: #f3f4f6; overflow: hidden; } 
 
-        /* 登录页背景 */
         #loginSection { background-color: #1e40af; } 
 
         .login-card {
@@ -102,7 +100,13 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #bbb; border-radius: 3px; }
         
-        #draggableListBtn { transition: box-shadow 0.2s; box-shadow: -2px 2px 8px rgba(0,0,0,0.2); touch-action: none; z-index: 50; }
+        #draggableListBtn { 
+            transition: box-shadow 0.2s; 
+            box-shadow: -2px 2px 8px rgba(0,0,0,0.2); 
+            touch-action: none; 
+            z-index: 50; 
+            cursor: pointer; /* 确保显示手型 */
+        }
         #draggableListBtn:active { opacity: 0.9; }
 
         .pull-indicator { height: 0; overflow: hidden; transition: height 0.2s; display: flex; align-items: center; justify-content: center; background: #f3f4f6; color: #6b7280; font-size: 0.8rem; }
@@ -286,6 +290,7 @@
                 </div>
             </main>
 
+            <!-- ★★★ 修复后的 LIST 按钮 ★★★ -->
             <button id="draggableListBtn" class="fixed right-0 top-1/2 bg-white text-gray-800 font-bold py-2 pl-3 pr-2 rounded-l-lg flex flex-col items-center justify-center border border-r-0 border-gray-300 w-12 h-14 cursor-move">
                 <i class="fa-solid fa-box-open text-primary text-xl mb-1 pointer-events-none"></i>
                 <span class="text-[10px] pointer-events-none">LIST</span>
@@ -400,8 +405,7 @@
         let adminTasks = [];
         let adminExportLogs = []; 
         
-        // 1. Hardcoded Rep Directory (Stable & Fast)
-        const repDirectory = {
+        let repDirectory = {
             "10543": "Beny",
             "10882": "Prince",
             "10989": "Abigail",
@@ -410,23 +414,62 @@
         };
 
         window.onload = function() {
-            // 0. Remove Splash immediately
-            const saved = localStorage.getItem('salesMasterUser');
-            if(!saved) {
-                document.getElementById('loginSection').classList.remove('hidden');
-            } else {
-                // If logged in, nothing covers the main screen
-            }
+            setTimeout(() => {
+                const saved = localStorage.getItem('salesMasterUser');
+                if(!saved) {
+                    document.getElementById('loginSection').classList.remove('hidden');
+                } else {
+                    document.body.classList.add('loaded');
+                }
+            }, 100);
 
             loadCustomersCSV(); 
             loadProductCSV(); 
+            
+            // ★★★ 核心修复：更稳健的按钮事件绑定 ★★★
             initDraggableListBtn(); 
+            
             checkSession();
             initPullToRefresh('adminMain', 'adminPullIndicator');
             initPullToRefresh('salesMain', 'salesPullIndicator');
         };
 
-        function initDraggableListBtn() { const btn = document.getElementById('draggableListBtn'); let isDragging = false, startY, startTop; const handleStart = (e) => { isDragging = false; const touch = e.touches ? e.touches[0] : e; startY = touch.clientY; startTop = btn.offsetTop; }; const handleMove = (e) => { const touch = e.touches ? e.touches[0] : e; if (Math.abs(touch.clientY - startY) > 5) isDragging = true; if (isDragging) { e.preventDefault(); let newTop = startTop + (touch.clientY - startY); btn.style.top = Math.max(50, Math.min(window.innerHeight - 80, newTop)) + 'px'; } }; btn.addEventListener('touchstart', handleStart, {passive: false}); btn.addEventListener('touchmove', handleMove, {passive: false}); btn.addEventListener('click', () => { if (!isDragging) openProductPage(); }); }
+        // ★★★ 修复后的 LIST 按钮逻辑 (点击/拖拽完全分离) ★★★
+        function initDraggableListBtn() { 
+            const btn = document.getElementById('draggableListBtn'); 
+            let isDragging = false;
+            let startY, startTop;
+
+            btn.addEventListener('touchstart', (e) => {
+                isDragging = false;
+                startY = e.touches[0].clientY;
+                startTop = btn.offsetTop;
+            }, {passive: false});
+
+            btn.addEventListener('touchmove', (e) => {
+                const y = e.touches[0].clientY;
+                if (Math.abs(y - startY) > 5) {
+                    isDragging = true;
+                    e.preventDefault(); 
+                    let newTop = startTop + (y - startY);
+                    newTop = Math.max(50, Math.min(window.innerHeight - 80, newTop));
+                    btn.style.top = newTop + 'px';
+                }
+            }, {passive: false});
+
+            btn.addEventListener('touchend', (e) => {
+                if (!isDragging) {
+                    // 如果不是拖拽，则触发点击
+                    openProductPage();
+                }
+                isDragging = false;
+            });
+            
+            // 兼容鼠标点击
+            btn.addEventListener('click', (e) => {
+                if (!isDragging) openProductPage();
+            });
+        }
         
         function checkSession() { 
             const saved = localStorage.getItem('salesMasterUser'); 
@@ -485,13 +528,13 @@
             if (!silent) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin animate-spin"></i> Checking...'; btn.classList.add('btn-loading'); }
             if (!silent) await new Promise(r => setTimeout(r, 50));
 
-            // Admin
             if (code.toLowerCase() === 'admin' && pass === '8888') { 
                 currentUser = { code: 'admin', name: 'Administrator', isAdmin: true }; 
                 localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
                 await refreshData(); 
                 document.getElementById('loginSection').classList.add('hidden'); 
                 document.getElementById('adminSection').classList.remove('hidden'); 
+                document.body.classList.add('loaded');
                 addAssignRow(); initAdminReportFilters(); 
                 if(!silent) resetLoginBtn();
                 return; 
@@ -502,7 +545,6 @@
                 return; 
             } 
             
-            // Rep Login via Hardcoded List (Instant)
             if (repDirectory[code]) {
                 let finalName = repDirectory[code];
                 myCustomers = allSalesData.filter(c => c.repCode == code); 
@@ -511,6 +553,7 @@
                 await refreshData(); 
                 document.getElementById('loginSection').classList.add('hidden'); 
                 document.getElementById('appSection').classList.remove('hidden'); 
+                document.body.classList.add('loaded'); 
                 document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; 
                 listenForPdfStatus(); 
                 listenForHistory(); 
@@ -518,7 +561,6 @@
                 return;
             }
 
-            // Fallback for CSV Reps
             const customers = allSalesData.filter(c => c.repCode == code); 
             if (customers.length > 0) { 
                  myCustomers = customers;
@@ -527,6 +569,7 @@
                  await refreshData();
                  document.getElementById('loginSection').classList.add('hidden');
                  document.getElementById('appSection').classList.remove('hidden');
+                 document.body.classList.add('loaded');
                  document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`;
                  listenForPdfStatus(); listenForHistory();
                  if(!silent) resetLoginBtn();
@@ -537,7 +580,7 @@
         }
 
         function resetLoginBtn() { const btn = document.getElementById('btnLogin'); btn.innerHTML = 'LOGIN'; btn.classList.remove('btn-loading'); }
-        function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; }
+        function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; document.body.classList.remove('loaded'); }
 
         // ================= ADMIN FUNCTIONS =================
         async function loadAllDataForAdmin() {
@@ -566,7 +609,6 @@
         async function adminApproveRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'approved'}); renderAdminRequests(); }
         async function adminRejectRequest(id) { await db.collection('pdf_requests').doc(id).update({status: 'rejected'}); renderAdminRequests(); }
 
-        // ★★★ 1. Assign Row from Hardcoded Dict ★★★
         function addAssignRow() { 
             const container = document.getElementById('assignRowsContainer'); 
             const rowId = Date.now() + Math.random(); 
@@ -585,7 +627,7 @@
             filtered.slice(0, 50).forEach(t => { const isDone = t.status === 'completed'; const statusColor = isDone ? 'text-green-600' : 'text-orange-500'; const div = document.createElement('div'); div.className = `p-3 rounded border flex justify-between items-center ${isDone ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`; div.innerHTML = `<div><div class="font-bold text-gray-800 text-sm">${t.repName} <span class="text-gray-400 text-xs">-></span> ${t.customerName}</div><div class="text-xs text-gray-500 mt-1">${t.assignedDate} | ${t.taskDetail}</div><div class="text-[10px] font-bold uppercase mt-1 ${statusColor}">${t.status}</div></div><div>${isDone ? `<button onclick="adminRestoreTask('${t.docId}')" class="text-blue-500 text-xs underline font-bold">Undo</button>` : `<button onclick="adminDeleteTask('${t.docId}')" class="text-red-300 hover:text-red-500"><i class="fa-solid fa-rotate-left"></i></button>`}</div>`; container.appendChild(div); });
         }
         async function adminRestoreTask(id) { if(confirm('Undo this task?')) await db.collection('admin_tasks').doc(id).update({status: 'pending'}); refreshData(); }
-        async function adminDeleteTask(id) { if(confirm('Cancel/Delete this task?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
+        async function adminDeleteTask(id) { if(confirm('Delete task permanently?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
         function adminExportTasks() { let csv = "AssignedDate,Rep,Customer,Detail,Status\n"; const f = document.getElementById('adminTaskFilter').value.toLowerCase(); adminTasks.filter(t => t.repName.toLowerCase().includes(f) || t.customerName.toLowerCase().includes(f)).forEach(t => csv += `${t.assignedDate},${t.repName},${t.customerName},"${t.taskDetail}",${t.status}\n`); const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = `Tasks_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click(); }
 
         // ================= SALES REP FUNCTIONS =================
@@ -610,26 +652,7 @@
         function filterSidebarList(val) { applySidebarFilter(); }
         async function loadAssignedTasksForRep() { const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', '==', 'pending').get(); adminTasks = []; snap.forEach(doc => adminTasks.push({ docId: doc.id, ...doc.data() })); }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
-        
-        function renderAcceptTasks() { 
-            const container = document.getElementById('acceptTaskList'); const noMsg = document.getElementById('noAssignedTasksMsg'); container.innerHTML = '';
-            if (adminTasks.length === 0) { noMsg.classList.remove('hidden'); return; } noMsg.classList.add('hidden');
-            adminTasks.forEach(t => { 
-                const div = document.createElement('div'); div.id = `accept-${t.docId}`; div.className = "bg-white p-4 rounded shadow border-l-4 border-primary flex justify-between items-center animate-fade-in"; 
-                div.innerHTML = `
-                    <div>
-                        <div class="font-bold text-gray-800">${t.customerName} <span class="text-xs bg-gray-200 px-1 rounded">${t.customerId}</span></div>
-                        <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-user-tag mr-1"></i> ${t.taskDetail}</div>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-10 h-10 rounded-full hover:bg-green-200 text-green-600 shadow flex items-center justify-center" title="Add to Today"><i class="fa-solid fa-plus"></i></button>
-                        <button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-10 h-10 rounded-full hover:bg-blue-800 text-white shadow flex items-center justify-center" title="Mark Done"><i class="fa-solid fa-check"></i></button>
-                    </div>`; 
-                container.appendChild(div); 
-            }); 
-            document.getElementById('assignedCountBadge').innerText = adminTasks.length; document.getElementById('assignedCountBadge').classList.toggle('hidden', adminTasks.length === 0); 
-        }
-        
+        function renderAcceptTasks() { document.getElementById('acceptTaskList').innerHTML = adminTasks.map(t => `<div class="bg-white p-4 rounded shadow mb-2 flex justify-between"><div><div class="font-bold">${t.customerName}</div><div class="text-xs">${t.taskDetail}</div></div><div class="flex space-x-3"><button onclick="addTaskToToday('${t.docId}', '${t.customerId}')" class="bg-gray-100 w-10 h-10 rounded-full hover:bg-green-200 text-green-600 shadow flex items-center justify-center"><i class="fa-solid fa-plus"></i></button><button onclick="completeAssignedTask('${t.docId}')" class="bg-primary w-10 h-10 rounded-full hover:bg-blue-800 text-white shadow flex items-center justify-center"><i class="fa-solid fa-check"></i></button></div></div>`).join(''); document.getElementById('assignedCountBadge').innerText = adminTasks.length; document.getElementById('assignedCountBadge').classList.toggle('hidden', adminTasks.length === 0); }
         function addTaskToToday(did, cid) { addToTask(cid); const btn = document.querySelector(`#accept-${did} button`); if(btn) btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>'; }
         async function completeAssignedTask(docId) { if(!confirm("Mark completed?")) return; await db.collection('admin_tasks').doc(docId).update({ status: 'completed', completedDate: new Date().toISOString() }); const el = document.getElementById(`accept-${docId}`); el.classList.add('task-fade-out'); setTimeout(() => { adminTasks = adminTasks.filter(t => t.docId !== docId); renderAcceptTasks(); updateAssignedBadge(); }, 500); }
         async function loadTasksFromCloud() { const d = await db.collection('daily_tasks').doc(currentUser.code).get(); if (d.exists && d.data().date === new Date().toLocaleDateString()) { todayTasks = d.data().tasks || []; } else { todayTasks = []; } }
