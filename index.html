@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 10.8</title>
+    <title>Sales Master Pro 10.9</title>
     
     <!-- ★★★ 图标配置 ★★★ -->
     <script>
@@ -53,16 +53,15 @@
             }
         }
 
-        // ★★★ 核心修改：移除 icons 配置以消除丑陋的启动页图片 ★★★
         const manifest = {
             "name": "Sales Master Pro",
             "short_name": "SalesMaster",
             "start_url": ".",
             "display": "standalone",
-            "background_color": "#1e40af", // 保持深蓝背景，与登录页无缝衔接
+            "background_color": "#1e40af",
             "theme_color": "#1e40af",
             "orientation": "portrait"
-            // "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }] // 注释掉此行，移除启动页中间的白框图
+            // "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }] 
         };
         const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
         const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob); document.head.appendChild(link);
@@ -71,9 +70,7 @@
     </script>
     
     <style>
-        /* 默认背景为深蓝，打开APP第一眼看到的就是这个颜色，和启动画面一致，实现隐形过渡 */
         body { background-color: #1e40af; overflow: hidden; } 
-        /* 登录成功后变为浅灰 */
         body.loaded { background-color: #f3f4f6; } 
 
         #loginSection { background-color: #1e40af; } 
@@ -408,15 +405,10 @@
         };
 
         // ★★★ 2. CHECK SESSION IMMEDIATELY (Before DOM Load) ★★★
-        // This makes the transition "instant" for logged in users
         try {
             const savedUser = localStorage.getItem('salesMasterUser');
             if (savedUser) {
-                // Pre-set a flag or simple style if possible, 
-                // but main logic needs DOM elements, so we run checkSession() 
-                // as the very first thing in onload, but we optimize DOM visibility here
             } else {
-                // Not logged in
             }
         } catch(e) {}
 
@@ -431,7 +423,6 @@
             initPullToRefresh('adminMain', 'adminPullIndicator');
             initPullToRefresh('salesMain', 'salesPullIndicator');
             
-            // Fallback: If checkSession didn't find a user, ensure login is shown
             const saved = localStorage.getItem('salesMasterUser');
             if(!saved) {
                 document.getElementById('loginSection').classList.remove('hidden');
@@ -447,9 +438,7 @@
                 document.getElementById('loginRepCode').value = user.code === 'admin' ? 'admin' : user.code; 
                 document.getElementById('loginPassword').value = user.code === 'admin' ? '8888' : '0000'; 
                 
-                // ★★★ INSTANT UI SWITCH ★★★
-                // Make app visible immediately, hide login, remove blue background
-                document.body.classList.add('loaded'); // Turns background gray
+                document.body.classList.add('loaded'); 
                 document.getElementById('loginSection').classList.add('hidden');
                 
                 if (user.isAdmin) {
@@ -540,7 +529,6 @@
             // Hardcoded Rep Check
             if (repDirectory[code]) {
                 let finalName = repDirectory[code];
-                // Note: myCustomers might be empty if CSV hasn't finished, but name is known
                 if(allSalesData.length > 0) myCustomers = allSalesData.filter(c => c.repCode == code); 
                 currentUser = { code: code, name: finalName, isAdmin: false }; 
                 localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
@@ -571,7 +559,6 @@
                  return;
             }
             
-            // If silent and data not loaded yet, just return, don't show error
             if(silent) return;
 
             if(!silent) { status.innerText = "Code not found"; status.classList.remove('hidden'); resetLoginBtn(); }
@@ -705,8 +692,8 @@
         function addReportRow(d=null) { document.getElementById('reportRows').innerHTML += `<div class="bg-gray-50 p-4 rounded mb-2 border relative"><button onclick="this.parentElement.remove()" class="absolute right-2 top-2 text-gray-300 hover:text-red-500"><i class="fa-solid fa-times"></i></button><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="relative"><label class="text-xs font-bold text-gray-400">CUSTOMER</label><input type="text" value="${d?d.name:''}" class="w-full p-2 border rounded mt-1 bg-white" placeholder="Search..." onkeyup="searchRepCust(this, '${Date.now()+Math.random()}')"><div id="res-${Date.now()+Math.random()}" class="absolute z-10 bg-white w-full max-h-40 overflow-auto shadow hidden rounded border"></div><input type="hidden" class="r-id" value="${d?d.id:''}"><input type="hidden" class="r-nm" value="${d?d.name:''}"></div><div class="md:col-span-2"><label class="text-xs font-bold text-gray-400">OUTCOME</label><input type="text" class="r-note w-full p-2 border rounded mt-1 bg-white" placeholder="Result..."></div></div></div>`; }
         function searchRepCust(inp, id) { const val = inp.value.toLowerCase(); const box = inp.nextElementSibling; if(val.length<1) { box.classList.add('hidden'); return; } box.innerHTML = ''; box.classList.remove('hidden'); myCustomers.filter(c=>c.name.toLowerCase().includes(val)).slice(0,5).forEach(c=>{ const d = document.createElement('div'); d.className="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm"; d.innerText=c.name; d.onclick=()=>{ inp.value=c.name; inp.parentElement.querySelector('.r-id').value=c.id; inp.parentElement.querySelector('.r-nm').value=c.name; box.classList.add('hidden'); }; box.appendChild(d); }); }
         
-        // ★★★ 2. Modified Submit Report Function with WhatsApp Share ★★★
-        async function submitReport() { 
+        // ★★★ 2. Modified Submit Report Function for iOS ★★★
+        function submitReport() { 
             const batch = db.batch(); 
             let hasData = false;
             
@@ -719,7 +706,6 @@
                 const nt = el.parentElement.parentElement.parentElement.querySelector('.r-note').value; 
                 
                 if(nm && nt) { 
-                    // Add to Firestore Batch
                     batch.set(db.collection('reports').doc(), { 
                         date: new Date().toISOString(), 
                         customerId: el.value, 
@@ -729,9 +715,7 @@
                         timestamp: firebase.firestore.FieldValue.serverTimestamp() 
                     }); 
                     
-                    // Add to WhatsApp Message
                     waMessage += `${count}. *${nm}*\n   Outcome: ${nt}\n\n`;
-                    
                     hasData = true; 
                     count++;
                 } 
@@ -739,14 +723,18 @@
             
             if(!hasData) return alert("Fill data"); 
             
-            // Save to Database
-            await batch.commit(); 
-            
-            // Close Modal
-            closeReportModal(); 
-            
-            // Open WhatsApp
+            // ★ IOS FIX: Open WhatsApp IMMEDIATELY (Synchronously) to avoid popup blocker
+            // The database save happens in background after the window opens
             window.open(`https://wa.me/?text=${encodeURIComponent(waMessage)}`, '_blank');
+            
+            // Save to Database (in background)
+            batch.commit().then(() => {
+                console.log("Report saved successfully");
+                closeReportModal(); 
+            }).catch(error => {
+                console.error("Error saving report:", error);
+                // Note: user is already in WhatsApp, so maybe just log it
+            });
         }
 
         // ================= 3. PRODUCT & REQUEST WORKFLOW =================
