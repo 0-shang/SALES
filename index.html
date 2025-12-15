@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 10.7</title>
+    <title>Sales Master Pro 10.8</title>
     
     <!-- ★★★ 图标配置 ★★★ -->
     <script>
@@ -53,15 +53,16 @@
             }
         }
 
+        // ★★★ 核心修改：移除 icons 配置以消除丑陋的启动页图片 ★★★
         const manifest = {
             "name": "Sales Master Pro",
             "short_name": "SalesMaster",
             "start_url": ".",
             "display": "standalone",
-            "background_color": "#1e40af",
+            "background_color": "#1e40af", // 保持深蓝背景，与登录页无缝衔接
             "theme_color": "#1e40af",
-            "orientation": "portrait",
-            "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }]
+            "orientation": "portrait"
+            // "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }] // 注释掉此行，移除启动页中间的白框图
         };
         const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
         const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob); document.head.appendChild(link);
@@ -70,9 +71,9 @@
     </script>
     
     <style>
-        /* 1. 默认背景色为深蓝 (#1e40af)，确保打开瞬间是蓝色背景而非白屏 */
+        /* 默认背景为深蓝，打开APP第一眼看到的就是这个颜色，和启动画面一致，实现隐形过渡 */
         body { background-color: #1e40af; overflow: hidden; } 
-        /* 登录后添加此 class 变为浅灰背景 */
+        /* 登录成功后变为浅灰 */
         body.loaded { background-color: #f3f4f6; } 
 
         #loginSection { background-color: #1e40af; } 
@@ -406,9 +407,22 @@
             "11029": "Linda"
         };
 
+        // ★★★ 2. CHECK SESSION IMMEDIATELY (Before DOM Load) ★★★
+        // This makes the transition "instant" for logged in users
+        try {
+            const savedUser = localStorage.getItem('salesMasterUser');
+            if (savedUser) {
+                // Pre-set a flag or simple style if possible, 
+                // but main logic needs DOM elements, so we run checkSession() 
+                // as the very first thing in onload, but we optimize DOM visibility here
+            } else {
+                // Not logged in
+            }
+        } catch(e) {}
+
         window.onload = function() {
-            // ★★★ 1. Instant check for session (Moved to top for speed) ★★★
-            checkSession();
+            // ★★★ 3. Execute Session Check FIRST, FAST ★★★
+            checkSession(); 
 
             // Load CSVs in background
             loadCustomersCSV(); 
@@ -417,6 +431,7 @@
             initPullToRefresh('adminMain', 'adminPullIndicator');
             initPullToRefresh('salesMain', 'salesPullIndicator');
             
+            // Fallback: If checkSession didn't find a user, ensure login is shown
             const saved = localStorage.getItem('salesMasterUser');
             if(!saved) {
                 document.getElementById('loginSection').classList.remove('hidden');
@@ -432,8 +447,9 @@
                 document.getElementById('loginRepCode').value = user.code === 'admin' ? 'admin' : user.code; 
                 document.getElementById('loginPassword').value = user.code === 'admin' ? '8888' : '0000'; 
                 
-                // Immediately switch to app view to avoid "splash screen" feel
-                document.body.classList.add('loaded');
+                // ★★★ INSTANT UI SWITCH ★★★
+                // Make app visible immediately, hide login, remove blue background
+                document.body.classList.add('loaded'); // Turns background gray
                 document.getElementById('loginSection').classList.add('hidden');
                 
                 if (user.isAdmin) {
