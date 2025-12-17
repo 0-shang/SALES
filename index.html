@@ -53,14 +53,14 @@
             }
         }
 
-        const manifest = {
-            "name": "Sales Master Pro",
-            "short_name": "SalesMaster",
-            "start_url": ".",
-            "display": "standalone",
-            "background_color": "#1e40af",
-            "theme_color": "#1e40af",
-            "orientation": "portrait"
+       const manifest = {
+    "name": "Sales Master Pro",
+    "short_name": "SalesMaster",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#ffffff", // 改为纯白
+    "theme_color": "#ffffff",      // 改为纯白
+    "orientation": "portrait"
             // "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }] 
         };
         const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
