@@ -1343,7 +1343,7 @@
             if(!cartCustomer) return alert("Please select a customer first."); // Validation Added
 
             // Format: Row 1 Empty. Row 2+: Code, A, Qty
-            let csv = "\n"; 
+            let csv = "\uFEFF驭邦码,仓库,数量\n";
             cartItems.forEach(i => {
                 csv += `${i.code},A,${i.qty}\n`;
             });
