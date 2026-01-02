@@ -988,12 +988,13 @@
 
         // 修改：History 下载逻辑，增加图片支持
         async function downloadPdfFromHistory(query) {
-            // UI 提示
             const sidebarTitle = document.querySelector('#requestSidebar h3');
             const originalTitle = sidebarTitle.innerText;
             sidebarTitle.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
 
-            const searchTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            // ★★★ 这里同步修改搜索逻辑 ★★★
+            const lowerVal = query.toLowerCase().trim();
+            
             let forceNew = (query.toLowerCase() === 'new');
             let forceOld = (query.toLowerCase() === 'old');
 
@@ -1004,7 +1005,16 @@
                 if (forceOld) return p.isNew === '2';
                 
                 const productString = (p.name + " " + p.code).toLowerCase();
-                return searchTerms.every(term => productString.includes(term));
+                
+                if (lowerVal.includes('+')) {
+                    // OR 逻辑
+                    const orTerms = lowerVal.split('+').map(t => t.trim()).filter(t => t.length > 0);
+                    return orTerms.some(term => productString.includes(term));
+                } else {
+                    // AND 逻辑
+                    const andTerms = lowerVal.split(/\s+/).filter(t => t.length > 0);
+                    return andTerms.every(term => productString.includes(term));
+                }
             });
 
             if(filtered.length === 0) {
@@ -1028,7 +1038,6 @@
                 if (!forceNew && p.isNew === '1') { pName += " (New Arrivals)"; }
                 let displayPrice = (p.promo && p.promo !== "0") ? p.promo : p.price;
                 
-                // 加载图片
                 const imgData = await getImageData(`image/${p.code}.jpg`);
 
                 return {
@@ -1064,6 +1073,10 @@
             doc.save(fileName); 
         }
 
+            sidebarTitle.innerText = originalTitle;
+            doc.save(fileName); 
+        }
+
         function listenForPdfStatus() {
             if(!currentUser || currentUser.isAdmin) return;
             db.collection('pdf_requests')
@@ -1085,23 +1098,36 @@
             const container = document.getElementById('productResultsContainer');
             const filterMode = document.getElementById('productFilterSelect').value;
             
-            if ((!val || val.length < 2) && filterMode === 'all') { 
+            if ((!val || val.length < 1) && filterMode === 'all') { 
                 currentProductResults = []; 
                 container.innerHTML = `<div class="text-center text-gray-400 mt-10"><i class="fa-solid fa-magnifying-glass text-4xl mb-3"></i><p>Type to search.</p></div>`; 
                 resetRequestButton(); 
                 return; 
             }
             
-            let searchTerms = []; 
-            if (val) searchTerms = val.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            const lowerVal = val ? val.toLowerCase().trim() : "";
 
             currentProductResults = allProductData.filter(p => {
+                const productString = (p.name + " " + p.code).toLowerCase();
                 let matchesText = true;
-                if (searchTerms.length > 0) {
-                     const productString = (p.name + " " + p.code).toLowerCase();
-                     matchesText = searchTerms.every(term => productString.includes(term));
+
+                if (lowerVal.length > 0) {
+                    if (lowerVal.includes('+')) {
+                        // ★★★ OR 逻辑 (包含其中任意一个) ★★★
+                        // 例如: MAN+DAF -> 只要有 MAN 或者有 DAF 就可以
+                        const orTerms = lowerVal.split('+').map(t => t.trim()).filter(t => t.length > 0);
+                        // some() 表示只要有一个条件满足就返回 true
+                        matchesText = orTerms.some(term => productString.includes(term));
+                    } else {
+                        // ★★★ AND 逻辑 (同时包含所有) ★★★
+                        // 例如: MAN DAF -> 必须同时有 MAN 和 DAF
+                        const andTerms = lowerVal.split(/\s+/).filter(t => t.length > 0);
+                        // every() 表示所有条件都必须满足
+                        matchesText = andTerms.every(term => productString.includes(term));
+                    }
                 }
                 
+                // 其他下拉框筛选条件 (库存、新旧)
                 if (filterMode === 'stock' && p.stock <= 0) return false;
                 if (filterMode === 'new' && p.isNew !== '1') return false;
                 if (filterMode === 'old' && p.isNew !== '2') return false;
@@ -1109,6 +1135,7 @@
                 return matchesText;
             });
 
+            // 按钮状态更新逻辑
             const reqBtn = document.getElementById('btnRequestPDF');
             reqBtn.disabled = false;
             reqBtn.classList.remove('bg-gray-300', 'cursor-not-allowed');
@@ -1119,11 +1146,13 @@
                  document.getElementById('btnRequestText').innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i> Request PDF';
             }
 
+            // 无结果处理
             if(currentProductResults.length === 0) {
                  container.innerHTML = `<div class="text-center text-gray-400 mt-10"><p>No results.</p></div>`;
                  return;
             }
 
+            // 渲染列表
             container.innerHTML = currentProductResults.map(p => {
                 const isOutOfStock = p.stock <= 0;
                 
