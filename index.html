@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 11.9</title>
+    <title>Sales Master Pro 11.8</title>
     
     <script>
         const APP_ICON_HD = "icon-512.png"; 
@@ -515,18 +515,28 @@
         let cartItems = []; 
         let cartCustomer = null; 
 
-        // Update 1: Add New Users & VIP Logic
+        // Update 1: Add New Users
         const repDirectory = {
             "10543": "Beny",
             "10882": "Prince",
             "10989": "Abigail",
             "11006": "Hilda",
             "11029": "Linda",
+            "11085": "AKORFA",
+            "10544": "BENEDICTA",
+            "11202": "PRINCE B",
+            "11030": "KUMBALA",
+            "10907": "ESTHER YEBOAH",
+            "10596": "KOFI",
+            "10595": "OBENG",
+
+
+
             // New Users
-            "11033": "商宇琛",
-            "10974": "徐亮",
-            "11077": "李勇辉",
-            "10848": "朱立刚"
+            "11033": "Shang",
+            "10974": "Marvin",
+            "11077": "Michael",
+            "10848": "Leone"
         };
 
         const vipUsers = ["11033", "10974", "11077", "10848"];
@@ -1115,18 +1125,7 @@
             
             // Image Logic
             const img = document.getElementById('detailImage');
-            
-            // 1. Clean code
-            let cleanCode = p.code.trim();
-            // 2. Replace slashes
-            let safeFileName = cleanCode.replace(/\//g, '_'); 
-            // 3. Set Src
-            img.src = `image/${safeFileName}.jpg`; 
-            
-            // 4. Error handling
-            img.onerror = function() {
-                this.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOWNhM2FmIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIGQ9Ik0yMSA5djExYTIgMiAwIDAgMS0yIDJIMUM1YTIgMiAwIDAgMS0yLTJWOUMzIDUgNyAyIDExIDJzOCAzIDggN3oiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjExIiByPSI0Ii8+PC9zdmc+';
-            };
+            img.src = `image/${p.code}.jpg`; 
             
             if (p.isNew === '1') document.getElementById('detailBadgeNew').classList.remove('hidden');
             else document.getElementById('detailBadgeNew').classList.add('hidden');
@@ -1341,10 +1340,10 @@
 
         function downloadCartCsv() {
             if(cartItems.length === 0) return alert("Cart is empty");
-            if(!cartCustomer) return alert("Please select a customer first."); 
+            if(!cartCustomer) return alert("Please select a customer first."); // Validation Added
 
-            // Format: Header Row + Data
-            let csv = "\uFEFF驭邦码,仓库,数量\n"; 
+            // Format: Row 1 Empty. Row 2+: Code, A, Qty
+            let csv = "\uFEFF驭邦码,仓库,数量\n";
             cartItems.forEach(i => {
                 csv += `${i.code},A,${i.qty}\n`;
             });
