@@ -610,37 +610,32 @@
         }
 
         // CSV Loading Logic - Expanded for readability and stability
-       // 修改后的 loadCustomersCSV 部分
-function loadCustomersCSV() { 
-    Papa.parse("customers.csv", { 
-        download: true, 
-        header: true, 
-        skipEmptyLines: true, 
-        complete: function(results) { 
-            allSalesData = results.data.map(item => {
-                return { 
-                    id: (item.Code||item.code||"").trim(), 
-                    name: (item.Name||item.name||"Unknown").trim(), 
-                    csvRepName: (item.RepName||item.repname||"Sales").trim(), 
-                    
-                    // --- 关键修改在这里 ---
-                    // 请确保你的 CSV 文件里有一列包含销售员ID（如 10543），
-                    // 并将下方的 item.Rep 改为你 CSV 中实际的列头名称
-                    repCode: (item.Rep || item.rep || item.RepCode || item.repcode || item.RepID || item.Limit || "").trim().toUpperCase(), 
-                    // ---------------------
-
-                    phone: (item.Phone||item.phone||"").trim(), 
-                    credit: (item.Credit||item.credit||"0").trim() 
-                };
+        function loadCustomersCSV() { 
+            Papa.parse("customers.csv", { 
+                download: true, 
+                header: true, 
+                skipEmptyLines: true, 
+                complete: function(results) { 
+                    allSalesData = results.data.map(item => {
+                        return { 
+                            id: (item.Code||item.code||"").trim(), 
+                            name: (item.Name||item.name||"Unknown").trim(), 
+                            csvRepName: (item.RepName||item.repname||"Sales").trim(), 
+                            repCode: (item.Rep||item.Rep||"").trim().toUpperCase(), 
+                            phone: (item.Phone||item.phone||"").trim(), 
+                            credit: (item.Credit||item.credit||"0").trim() 
+                        };
+                    }); 
+                    if(currentUser && !currentUser.isAdmin) {
+                        if (repDirectory[currentUser.code]) {
+                            myCustomers = allSalesData.filter(c => c.repCode == currentUser.code);
+                        } else {
+                            myCustomers = allSalesData.filter(c => c.repCode == currentUser.code);
+                        }
+                    }
+                }
             }); 
-            
-            // 重新加载当前用户的客户列表（如果已经登录）
-            if(currentUser && !currentUser.isAdmin) {
-                myCustomers = allSalesData.filter(c => c.repCode == currentUser.code);
-            }
         }
-    }); 
-}
         
         function loadProductCSV() { 
             Papa.parse("products.csv", { 
