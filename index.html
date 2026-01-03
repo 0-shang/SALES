@@ -1508,6 +1508,24 @@
             text.innerHTML = '<i class="fa-solid fa-folder-open mr-2"></i> Open PDF';
             btn.onclick = () => window.open(currentPdfBlobUrl, '_blank');
         }
+// ==========================================
+// 补丁：修复 updateAssignedBadge 报错
+// 请将此段代码放在所有 script 的最后面
+// ==========================================
+function updateAssignedBadge() {
+    const badge = document.getElementById('assignedCountBadge');
+    // 防止 adminTasks 未定义导致的报错
+    const tasks = (typeof adminTasks !== 'undefined' && Array.isArray(adminTasks)) ? adminTasks : [];
+    
+    if (badge) {
+        if (tasks.length > 0) {
+            badge.innerText = tasks.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+}
     </script>
 </body>
 </html>
