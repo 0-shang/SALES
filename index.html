@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sales Master Pro 11.8</title>
+    <title>Sales Master Pro 11.9</title>
     
     <script>
         const APP_ICON_HD = "icon-512.png"; 
@@ -515,28 +515,18 @@
         let cartItems = []; 
         let cartCustomer = null; 
 
-        // Update 1: Add New Users
+        // Update 1: Add New Users & VIP Logic
         const repDirectory = {
             "10543": "Beny",
             "10882": "Prince",
             "10989": "Abigail",
             "11006": "Hilda",
             "11029": "Linda",
-            "11085": "AKORFA",
-            "10544": "BENEDICTA",
-            "11202": "PRINCE B",
-            "11030": "KUMBALA",
-            "10907": "ESTHER YEBOAH",
-            "10596": "KOFI",
-            "10595": "OBENG",
-
-
-
             // New Users
-            "11033": "Shang",
-            "10974": "Marvin",
-            "11077": "Michael",
-            "10848": "Leone"
+            "11033": "商宇琛",
+            "10974": "徐亮",
+            "11077": "李勇辉",
+            "10848": "朱立刚"
         };
 
         const vipUsers = ["11033", "10974", "11077", "10848"];
@@ -611,55 +601,27 @@
 
         // CSV Loading Logic - Expanded for readability and stability
         function loadCustomersCSV() { 
-            console.log("正在启动 CSV 加载程序...");
             Papa.parse("customers.csv", { 
                 download: true, 
                 header: true, 
-                skipEmptyLines: true,
-                // 添加错误捕捉
-                error: function(err, file, inputElem, reason) {
-                    console.error("CSV 加载严重错误:", err);
-                    alert("CSV加载失败！原因: " + err.message + "\n请按 F12 查看控制台红色错误。");
-                },
+                skipEmptyLines: true, 
                 complete: function(results) { 
-                    console.log("CSV 加载成功！读取到行数:", results.data.length);
-                    
-                    if (results.data.length === 0) {
-                        alert("CSV 文件是空的，或者格式不对！");
-                        return;
-                    }
-
                     allSalesData = results.data.map(item => {
-                        // 打印第一行数据，帮你检查列名是否正确
-                        if (item === results.data[0]) {
-                            console.log("CSV 第一行数据预览:", item);
-                            // 检查 'Limit' 是否真的存在，如果是 undefined，说明列名不对
-                            if (!item.Limit && !item.limit) {
-                                console.warn("警告：找不到 'Limit' 列！当前有的列名是:", Object.keys(item));
-                            }
-                        }
-
                         return { 
                             id: (item.Code||item.code||"").trim(), 
                             name: (item.Name||item.name||"Unknown").trim(), 
                             csvRepName: (item.RepName||item.repname||"Sales").trim(), 
-                            // 这里保留你原来的 Limit，或者改为 Rep
                             repCode: (item.Limit||item.limit||"").trim().toUpperCase(), 
                             phone: (item.Phone||item.phone||"").trim(), 
                             credit: (item.Credit||item.credit||"0").trim() 
                         };
                     }); 
-
-                    // 重新过滤一下当前用户的客户，防止登录时数据还没加载完
                     if(currentUser && !currentUser.isAdmin) {
-                         // 这里做个保险，如果 repDirectory 里有定义，就用定义，否则尝试匹配
                         if (repDirectory[currentUser.code]) {
-                            // 注意：这里需要确保 repCode 映射正确
                             myCustomers = allSalesData.filter(c => c.repCode == currentUser.code);
                         } else {
                             myCustomers = allSalesData.filter(c => c.repCode == currentUser.code);
                         }
-                        console.log(`当前用户 ${currentUser.code} 匹配到的客户数: ${myCustomers.length}`);
                     }
                 }
             }); 
@@ -1153,7 +1115,18 @@
             
             // Image Logic
             const img = document.getElementById('detailImage');
-            img.src = `image/${p.code}.jpg`; 
+            
+            // 1. Clean code
+            let cleanCode = p.code.trim();
+            // 2. Replace slashes
+            let safeFileName = cleanCode.replace(/\//g, '_'); 
+            // 3. Set Src
+            img.src = `image/${safeFileName}.jpg`; 
+            
+            // 4. Error handling
+            img.onerror = function() {
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOWNhM2FmIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIGQ9Ik0yMSA5djExYTIgMiAwIDAgMS0yIDJIMUM1YTIgMiAwIDAgMS0yLTJWOUMzIDUgNyAyIDExIDJzOCAzIDggN3oiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjExIiByPSI0Ii8+PC9zdmc+';
+            };
             
             if (p.isNew === '1') document.getElementById('detailBadgeNew').classList.remove('hidden');
             else document.getElementById('detailBadgeNew').classList.add('hidden');
@@ -1368,10 +1341,10 @@
 
         function downloadCartCsv() {
             if(cartItems.length === 0) return alert("Cart is empty");
-            if(!cartCustomer) return alert("Please select a customer first."); // Validation Added
+            if(!cartCustomer) return alert("Please select a customer first."); 
 
-            // Format: Row 1 Empty. Row 2+: Code, A, Qty
-            let csv = "\uFEFF驭邦码,仓库,数量\n";
+            // Format: Header Row + Data
+            let csv = "\uFEFF驭邦码,仓库,数量\n"; 
             cartItems.forEach(i => {
                 csv += `${i.code},A,${i.qty}\n`;
             });
@@ -1508,24 +1481,6 @@
             text.innerHTML = '<i class="fa-solid fa-folder-open mr-2"></i> Open PDF';
             btn.onclick = () => window.open(currentPdfBlobUrl, '_blank');
         }
-// ==========================================
-// 补丁：修复 updateAssignedBadge 报错
-// 请将此段代码放在所有 script 的最后面
-// ==========================================
-function updateAssignedBadge() {
-    const badge = document.getElementById('assignedCountBadge');
-    // 防止 adminTasks 未定义导致的报错
-    const tasks = (typeof adminTasks !== 'undefined' && Array.isArray(adminTasks)) ? adminTasks : [];
-    
-    if (badge) {
-        if (tasks.length > 0) {
-            badge.innerText = tasks.length;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-    }
-}
     </script>
 </body>
 </html>
