@@ -748,7 +748,7 @@
         }
         async function adminDeleteTask(id) { if(confirm('Delete/Cancel task?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
 
-        // 修改 index.html 中的这个函数
+       // 修改 index.html 中的这个函数
 async function syncLocalTasksCsvToFirebase() {
     // 1. 设置当前要读取的文件名（你可以根据需要手动修改这个变量，或做一个输入框）
     const csvFileName = "tasks2026-02-18.csv"; 
@@ -895,48 +895,19 @@ async function syncLocalTasksCsvToFirebase() {
             let week = 0, month = 0; globalHistory.forEach(h => { if (h.customerId === custId) { const d = new Date(h.date); if (d >= startOfWeek) week++; if (d >= startOfMonth) month++; } }); return { week, month };
         }
         function applySidebarFilter() {
-    const mode = document.getElementById('sidebarFilterMode').value; 
-    const q = document.querySelector('#taskSidebar input').value.toLowerCase();
-    
-    // 先建立一个余额映射表，方便快速查找
-    const balanceMap = {};
-    adminTasks.forEach(t => {
-        balanceMap[t.customerId] = t.balance;
-    });
-
-    let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
-    
-    if (mode === 'missed_week') { filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); } 
-    else if (mode === 'missed_month') { filtered = filtered.filter(c => getCustomerStats(c.id).month === 0); }
-    
-    const list = document.getElementById('customerSidebarList'); 
-    list.innerHTML = '';
-
-    filtered.slice(0, 200).forEach(c => {
-        const stats = getCustomerStats(c.id);
-        const balance = balanceMap[c.id] || "0.00"; // 获取该客户在tasks.csv里的余额
-        
-        const item = document.createElement('div');
-        item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer mb-2";
-        item.innerHTML = `
-            <div class="flex-1">
-                <div class="font-bold text-gray-700 text-sm">${c.name}</div>
-                <div class="text-[10px] text-gray-400 font-mono">${c.id}</div>
-                <div class="flex mt-1 space-x-3 text-[10px]">
-                    <span class="text-blue-600 font-bold">Credit: ${c.credit}</span>
-                    <span class="text-red-600 font-bold">Balance: ${balance}</span>
-                </div>
-            </div>
-            <div class="flex items-center space-x-2">
-                <div class="text-[10px] text-gray-500 text-right mr-2">
-                    <div>W: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div>
-                    <div>M: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div>
-                </div>
-                <button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500 p-2"><i class="fa-solid fa-plus-circle text-xl"></i></button>
-            </div>`;
-        list.appendChild(item);
-    });
-}
+            const mode = document.getElementById('sidebarFilterMode').value; const q = document.querySelector('#taskSidebar input').value.toLowerCase();
+            let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q));
+            if (mode === 'missed_week') { filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); } 
+            else if (mode === 'missed_month') { filtered = filtered.filter(c => getCustomerStats(c.id).month === 0); }
+            const list = document.getElementById('customerSidebarList'); list.innerHTML = '';
+            filtered.slice(0, 200).forEach(c => {
+                const stats = getCustomerStats(c.id);
+                const item = document.createElement('div');
+                item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer mb-2";
+                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div><div class="flex items-center space-x-2"><div class="text-[10px] text-gray-500 text-right mr-2"><div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div><div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div></div><button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500 p-2"><i class="fa-solid fa-plus-circle text-xl"></i></button></div>`;
+                list.appendChild(item);
+            });
+        }
         function filterSidebarList(val) { applySidebarFilter(); }
         async function loadAssignedTasksForRep() { 
             const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', 'in', ['pending', 'responded']).get(); 
@@ -944,56 +915,47 @@ async function syncLocalTasksCsvToFirebase() {
         }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
-       function renderAcceptTasks() { 
+        function renderAcceptTasks() { 
+    // 获取当前任务中最新的表格日期
     const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
+    
+    // 修改 Modal 的标题，加入更新日期
     const modalHeader = document.querySelector('#assignedTaskModal h3');
     if(modalHeader) {
         modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
     }
 
-    // 【新增过滤条件】：只有余额大于 0 的任务才显示
-    const displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
-
-    const container = document.getElementById('acceptTaskList');
-    const noMsg = document.getElementById('noAssignedTasksMsg');
-
-    if (displayTasks.length === 0) {
-        container.innerHTML = '';
-        noMsg.classList.remove('hidden');
-    } else {
-        noMsg.classList.add('hidden');
-        container.innerHTML = displayTasks.map(t => `
-        <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative">
-            <div class="pr-12">
-                <div class="flex justify-between items-start mb-1">
-                    <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
-                    <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">${t.orderDate}</span>
-                </div>
-                <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
-                <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
-                
-                <div class="mt-2 flex items-center text-sm">
-                    <span class="text-gray-500 mr-2">Total Balance:</span>
-                    <span class="font-bold text-red-600">₵ ${t.balance || '0.00'}</span>
-                </div>
-
-                <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
+    document.getElementById('acceptTaskList').innerHTML = adminTasks.map(t => `
+    <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative">
+        <div class="pr-12">
+            <div class="flex justify-between items-start mb-1">
+                <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
+                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">${t.orderDate}</span>
             </div>
+            <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
+            <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
             
-            <div class="absolute right-2 top-2 flex flex-col space-y-2">
-                <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
-                    <i class="fa-solid fa-check"></i>
-                </button>
-                <!-- 【图标变更】：铅笔改为加号，并修改点击函数 -->
-                <button onclick="addTaskFromAssigned('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
-                    <i class="fa-solid fa-plus"></i>
-                </button>
+            <!-- 新增：显示余额 -->
+            <div class="mt-2 flex items-center text-sm">
+                <span class="text-gray-500 mr-2">Total Balance:</span>
+                <span class="font-bold text-red-600">₵ ${t.balance || '0.00'}</span>
             </div>
-        </div>`).join('');
-    }
+
+            <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
+        </div>
+        
+        <div class="absolute right-2 top-2 flex flex-col space-y-2">
+            <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
+                <i class="fa-solid fa-check"></i>
+            </button>
+            <button onclick="remarkOnTask('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+        </div>
+    </div>`).join(''); 
     
-    document.getElementById('assignedCountBadge').innerText = displayTasks.length; 
-    document.getElementById('assignedCountBadge').classList.toggle('hidden', displayTasks.length === 0); 
+    document.getElementById('assignedCountBadge').innerText = adminTasks.length; 
+    document.getElementById('assignedCountBadge').classList.toggle('hidden', adminTasks.length === 0); 
 }
 
         async function confirmTaskReceipt(docId) {
@@ -1011,7 +973,6 @@ async function syncLocalTasksCsvToFirebase() {
                 }, 500);
             }
         }
-
 // 从分配的任务中小铃铛里直接添加客户到今日计划
 function addTaskFromAssigned(docId) {
     const task = adminTasks.find(t => t.docId === docId);
