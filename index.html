@@ -748,88 +748,92 @@
         }
         async function adminDeleteTask(id) { if(confirm('Delete/Cancel task?')) await db.collection('admin_tasks').doc(id).delete(); refreshData(); }
 
-        // REQ 2: Auto Sync Local CSV Logic
-        function syncLocalTasksCsvToFirebase() {
-            Papa.parse("tasks.csv", {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: async function(results) {
-                    const rows = results.data;
-                    if (rows.length === 0) {
-                        console.log("Tasks CSV is empty or not found.");
-                        return;
-                    }
+        // 修改 index.html 中的这个函数
+async function syncLocalTasksCsvToFirebase() {
+    // 1. 设置当前要读取的文件名（你可以根据需要手动修改这个变量，或做一个输入框）
+    const csvFileName = "tasks2026-02-18.csv"; 
+    
+    // 从文件名提取日期 (匹配 YYYY-MM-DD)
+    const dateMatch = csvFileName.match(/\d{4}-\d{2}-\d{2}/);
+    const tableDate = dateMatch ? dateMatch[0] : new Date().toLocaleDateString();
 
-                    const batch = db.batch();
-                    let count = 0;
+    Papa.parse(csvFileName, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        encoding: "UTF-8", 
+        complete: async function(results) {
+            const rows = results.data;
+            if (rows.length === 0) return;
 
-                    // Build Rep Name -> Code map
-                    const repMap = {};
-                    allSalesData.forEach(c => {
-                        if (c.repCode && c.csvRepName) repMap[c.csvRepName.toUpperCase()] = c.repCode;
-                    });
-                    for(let [k,v] of Object.entries(repDirectory)) { repMap[v.toUpperCase()] = k; }
+            const batch = db.batch();
+            let count = 0;
 
-                    // Loop through CSV rows
-                    rows.forEach(row => {
-                        // Headers: CODE, NAME, AMOUNT, DATE, REPNAME, MARK
-                        const code = row['CODE'];
-                        const name = row['NAME'];
-                        const amt = row['AMOUNT'];
-                        const date = row['DATE'];
-                        const repName = row['REPNAME'];
-                        const mark = row['MARK'];
+            // 构建销售员映射（复用你原有的逻辑）
+            const repMap = {};
+            allSalesData.forEach(c => { if (c.repCode && c.csvRepName) repMap[c.csvRepName.toUpperCase()] = c.repCode; });
+            for(let [k,v] of Object.entries(repDirectory)) { repMap[v.toUpperCase()] = k; }
 
-                        if (repName && code) {
-                            let targetRepCode = repMap[repName.toUpperCase().trim()];
-                            
-                            // Fallback lookup by checking startsWith or includes if exact match fails
-                            if(!targetRepCode) {
-                                // Try finding in allSalesData
-                                const found = allSalesData.find(c => c.csvRepName.toUpperCase() === repName.toUpperCase().trim());
-                                if(found) targetRepCode = found.repCode;
-                            }
+            for (const row of rows) {
+                const code = (row['CODE'] || "").trim();
+                const name = (row['NAME'] || "").trim();
+                const amt = (row['AMOUNT'] || "").trim();
+                const date = (row['DATE'] || "").trim();
+                const repName = (row['REPNAME'] || "").trim();
+                const mark = (row['MARK'] || "").trim();
+                const balance = (row['BALANCE'] || "0").trim(); // 新增：读取余额列
 
-                            if (targetRepCode) {
-                                // De-duplication check against currently loaded adminTasks
-                                // Unique Key: CustomerId + Amount + Date
-                                const exists = adminTasks.some(t => 
-                                    t.customerId === code && 
-                                    t.amount === amt && 
-                                    t.orderDate === date
-                                );
+                if (repName && code) {
+                    let targetRepCode = repMap[repName.toUpperCase()];
+                    if (targetRepCode) {
+                        // 【新查重逻辑】
+                        // 1. 检查是否存在完全一模一样的任务（ID + 金额 + 日期）
+                        const exactMatch = adminTasks.find(t => 
+                            t.customerId === code && t.amount === amt && t.orderDate === date
+                        );
 
-                                if (!exists) {
-                                    const ref = db.collection('admin_tasks').doc();
-                                    batch.set(ref, {
-                                        repCode: targetRepCode,
-                                        repName: repName,
-                                        customerId: code,
-                                        customerName: name,
-                                        amount: amt,
-                                        orderDate: date,
-                                        taskDetail: mark,
-                                        status: 'pending',
-                                        assignedDate: new Date().toLocaleDateString(),
-                                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                                    });
-                                    count++;
-                                }
-                            }
+                        if (exactMatch) {
+                            // 完全一样，直接跳过
+                            continue;
                         }
-                    });
 
-                    if (count > 0) {
-                        await batch.commit();
-                        console.log(`Synced ${count} new tasks from local CSV.`);
-                        refreshData();
-                    } else {
-                        console.log("No new tasks to sync from local CSV.");
+                        // 2. 检查该客户是否已有待处理任务但日期不同
+                        const oldTasks = adminTasks.filter(t => t.customerId === code && t.status === 'pending');
+                        
+                        // 如果有旧日期的任务，先在 batch 中标记删除
+                        oldTasks.forEach(old => {
+                            batch.delete(db.collection('admin_tasks').doc(old.docId));
+                        });
+
+                        // 3. 写入新任务
+                        const ref = db.collection('admin_tasks').doc();
+                        batch.set(ref, {
+                            repCode: targetRepCode,
+                            repName: repName,
+                            customerId: code,
+                            customerName: name,
+                            amount: amt,
+                            orderDate: date,
+                            taskDetail: mark,
+                            balance: balance,       // 新增：保存余额
+                            tableDate: tableDate,   // 新增：记录表格来源日期
+                            status: 'pending',
+                            assignedDate: new Date().toLocaleDateString(),
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        count++;
                     }
                 }
-            });
+            }
+
+            if (count > 0) {
+                await batch.commit();
+                alert(`Successfully synced ${count} tasks from ${csvFileName}`);
+                refreshData();
+            }
         }
+    });
+}
 
         function renderAdminReports() { 
             const dateVal = document.getElementById('adminReportDateFilter').value; 
@@ -891,19 +895,48 @@
             let week = 0, month = 0; globalHistory.forEach(h => { if (h.customerId === custId) { const d = new Date(h.date); if (d >= startOfWeek) week++; if (d >= startOfMonth) month++; } }); return { week, month };
         }
         function applySidebarFilter() {
-            const mode = document.getElementById('sidebarFilterMode').value; const q = document.querySelector('#taskSidebar input').value.toLowerCase();
-            let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q));
-            if (mode === 'missed_week') { filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); } 
-            else if (mode === 'missed_month') { filtered = filtered.filter(c => getCustomerStats(c.id).month === 0); }
-            const list = document.getElementById('customerSidebarList'); list.innerHTML = '';
-            filtered.slice(0, 200).forEach(c => {
-                const stats = getCustomerStats(c.id);
-                const item = document.createElement('div');
-                item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer mb-2";
-                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div><div class="flex items-center space-x-2"><div class="text-[10px] text-gray-500 text-right mr-2"><div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div><div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div></div><button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500 p-2"><i class="fa-solid fa-plus-circle text-xl"></i></button></div>`;
-                list.appendChild(item);
-            });
-        }
+    const mode = document.getElementById('sidebarFilterMode').value; 
+    const q = document.querySelector('#taskSidebar input').value.toLowerCase();
+    
+    // 先建立一个余额映射表，方便快速查找
+    const balanceMap = {};
+    adminTasks.forEach(t => {
+        balanceMap[t.customerId] = t.balance;
+    });
+
+    let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+    
+    if (mode === 'missed_week') { filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); } 
+    else if (mode === 'missed_month') { filtered = filtered.filter(c => getCustomerStats(c.id).month === 0); }
+    
+    const list = document.getElementById('customerSidebarList'); 
+    list.innerHTML = '';
+
+    filtered.slice(0, 200).forEach(c => {
+        const stats = getCustomerStats(c.id);
+        const balance = balanceMap[c.id] || "0.00"; // 获取该客户在tasks.csv里的余额
+        
+        const item = document.createElement('div');
+        item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer mb-2";
+        item.innerHTML = `
+            <div class="flex-1">
+                <div class="font-bold text-gray-700 text-sm">${c.name}</div>
+                <div class="text-[10px] text-gray-400 font-mono">${c.id}</div>
+                <div class="flex mt-1 space-x-3 text-[10px]">
+                    <span class="text-blue-600 font-bold">Credit: ${c.credit}</span>
+                    <span class="text-red-600 font-bold">Balance: ${balance}</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <div class="text-[10px] text-gray-500 text-right mr-2">
+                    <div>W: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div>
+                    <div>M: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div>
+                </div>
+                <button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500 p-2"><i class="fa-solid fa-plus-circle text-xl"></i></button>
+            </div>`;
+        list.appendChild(item);
+    });
+}
         function filterSidebarList(val) { applySidebarFilter(); }
         async function loadAssignedTasksForRep() { 
             const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', 'in', ['pending', 'responded']).get(); 
@@ -911,32 +944,57 @@
         }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
-        function renderAcceptTasks() { 
-            document.getElementById('acceptTaskList').innerHTML = adminTasks.map(t => `
-            <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative">
-                <div class="pr-12">
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
-                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">${t.orderDate}</span>
-                    </div>
-                    <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
-                    <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
-                    <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-1 border border-yellow-100">${t.taskDetail}</div>
+       function renderAcceptTasks() { 
+    const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
+    const modalHeader = document.querySelector('#assignedTaskModal h3');
+    if(modalHeader) {
+        modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
+    }
+
+    // 【新增过滤条件】：只有余额大于 0 的任务才显示
+    const displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
+
+    const container = document.getElementById('acceptTaskList');
+    const noMsg = document.getElementById('noAssignedTasksMsg');
+
+    if (displayTasks.length === 0) {
+        container.innerHTML = '';
+        noMsg.classList.remove('hidden');
+    } else {
+        noMsg.classList.add('hidden');
+        container.innerHTML = displayTasks.map(t => `
+        <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative">
+            <div class="pr-12">
+                <div class="flex justify-between items-start mb-1">
+                    <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
+                    <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">${t.orderDate}</span>
                 </div>
+                <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
+                <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
                 
-                <div class="absolute right-2 top-2 flex flex-col space-y-2">
-                    <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
-                        <i class="fa-solid fa-check"></i>
-                    </button>
-                    <button onclick="remarkOnTask('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
+                <div class="mt-2 flex items-center text-sm">
+                    <span class="text-gray-500 mr-2">Total Balance:</span>
+                    <span class="font-bold text-red-600">₵ ${t.balance || '0.00'}</span>
                 </div>
-            </div>`).join(''); 
+
+                <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
+            </div>
             
-            document.getElementById('assignedCountBadge').innerText = adminTasks.length; 
-            document.getElementById('assignedCountBadge').classList.toggle('hidden', adminTasks.length === 0); 
-        }
+            <div class="absolute right-2 top-2 flex flex-col space-y-2">
+                <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+                <!-- 【图标变更】：铅笔改为加号，并修改点击函数 -->
+                <button onclick="addTaskFromAssigned('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </div>`).join('');
+    }
+    
+    document.getElementById('assignedCountBadge').innerText = displayTasks.length; 
+    document.getElementById('assignedCountBadge').classList.toggle('hidden', displayTasks.length === 0); 
+}
 
         async function confirmTaskReceipt(docId) {
             if (confirm("Confirm receipt of order amount?")) { 
@@ -954,6 +1012,20 @@
             }
         }
 
+// 从分配的任务中小铃铛里直接添加客户到今日计划
+function addTaskFromAssigned(docId) {
+    const task = adminTasks.find(t => t.docId === docId);
+    if (task) {
+        // 使用原有的 addToTask 函数，传入客户 ID
+        addToTask(task.customerId);
+        
+        // 提示用户已添加
+        alert(`Added ${task.customerName} to Today's Task.`);
+        
+        // 可选：添加后自动关闭弹窗
+        // toggleAssignedModal(); 
+    }
+}
         async function remarkOnTask(docId) {
             const remark = prompt("Enter remarks:");
             if (remark && remark.trim() !== "") {
