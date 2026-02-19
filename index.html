@@ -800,24 +800,27 @@ async function syncLocalTasksCsvToFirebase() {
                 if (repName && code) {
                     let targetRepCode = repMap[repName.toUpperCase()];
                     if (targetRepCode) {
-                        // 【新查重逻辑】
-                        // 1. 检查是否存在完全一模一样的任务（ID + 金额 + 日期）
-                        const exactMatch = adminTasks.find(t => 
-                            t.customerId === code && t.amount === amt && t.orderDate === date
-                        );
+                        // 【修改后的查重逻辑】
+// 1. 检查是否存在完全一模一样的任务（ID + 金额 + 日期 + 业务员代码）
+const exactMatch = adminTasks.find(t => 
+    t.customerId === code && 
+    t.amount === amt && 
+    t.orderDate === date &&
+    t.repCode === targetRepCode // 新增：必须业务员也一样才算完全一样
+);
 
-                        if (exactMatch) {
-                            // 完全一样，直接跳过
-                            continue;
-                        }
+if (exactMatch) {
+    // 只有四项全对，才跳过
+    continue;
+}
 
-                        // 2. 检查该客户是否已有待处理任务但日期不同
-                        const oldTasks = adminTasks.filter(t => t.customerId === code && t.status === 'pending');
-                        
-                        // 如果有旧日期的任务，先在 batch 中标记删除
-                        oldTasks.forEach(old => {
-                            batch.delete(db.collection('admin_tasks').doc(old.docId));
-                        });
+// 2. 如果业务员变了，或者日期变了，我们需要把该客户所有 pending 的旧任务清理掉
+// 这样新业务员才能接手，旧业务员的任务会消失
+const oldTasks = adminTasks.filter(t => t.customerId === code && t.status === 'pending');
+
+oldTasks.forEach(old => {
+    batch.delete(db.collection('admin_tasks').doc(old.docId));
+});
 
                         // 3. 写入新任务
                         const ref = db.collection('admin_tasks').doc();
