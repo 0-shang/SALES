@@ -304,10 +304,11 @@
                 <div class="p-3 bg-gray-100 border-b space-y-2">
                     <input type="text" placeholder="Filter list..." class="w-full p-2 text-sm border rounded" oninput="filterSidebarList(this.value)">
                     <select id="sidebarFilterMode" onchange="applySidebarFilter()" class="w-full p-2 text-sm border rounded bg-white font-bold text-gray-600">
-                        <option value="all">Show All Customers</option>
-                        <option value="missed_week">⚠️ Not Visited This Week</option>
-                        <option value="missed_month">⛔ Not Visited This Month</option>
-                    </select>
+    <option value="all">Show All Customers</option>
+    <option value="balance_desc">Sort by Balance (High to Low)</option> <!-- 新增 -->
+    <option value="missed_week">⚠️ Not Visited This Week</option>
+    <option value="missed_month">⛔ Not Visited This Month</option>
+</select>
                 </div>
                 <div id="customerSidebarList" class="flex-1 overflow-y-auto p-2 space-y-2 pb-20"></div>
             </div>
@@ -588,15 +589,19 @@
             Papa.parse("customers.csv", { 
                 download: true, header: true, skipEmptyLines: true,
                 error: function(err, file, inputElem, reason) { alert("CSV Error: " + err.message); },
-                complete: function(results) { 
-                    allSalesData = results.data.map(item => ({ 
-                        id: (item.Code||item.code||"").trim(), 
-                        name: (item.Name||item.name||"Unknown").trim(), 
-                        csvRepName: (item.RepName||item.repname||"Sales").trim(), 
-                        repCode: (item.Limit||item.limit||"").trim().toUpperCase(), 
-                        phone: (item.Phone||item.phone||"").trim(), 
-                        credit: (item.Credit||item.credit||"0").trim() 
-                    })); 
+                // 在 loadCustomersCSV 函数内修改
+complete: function(results) { 
+    allSalesData = results.data.map(item => ({ 
+        id: (item.Code||item.code||"").trim(), 
+        name: (item.Name||item.name||"Unknown").trim(), 
+        csvRepName: (item.Repname||item.repname||"Sales").trim(), // 注意表头大小写匹配
+        repCode: (item.Limit||item.limit||"").trim().toUpperCase(), 
+        phone: (item.Phone||item.phone||"").trim(), 
+        credit: (item.Credit||item.credit||"0").trim(),
+        balance: (item.Balance||item.balance||"0").trim() // 新增：读取余额列
+    })); 
+    // ... 后面的逻辑保持不变
+}
 
                     if(currentUser && !currentUser.isAdmin) {
                         if(currentUser.code === '10595') {
@@ -895,19 +900,53 @@ async function syncLocalTasksCsvToFirebase() {
             let week = 0, month = 0; globalHistory.forEach(h => { if (h.customerId === custId) { const d = new Date(h.date); if (d >= startOfWeek) week++; if (d >= startOfMonth) month++; } }); return { week, month };
         }
         function applySidebarFilter() {
-            const mode = document.getElementById('sidebarFilterMode').value; const q = document.querySelector('#taskSidebar input').value.toLowerCase();
-            let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q));
-            if (mode === 'missed_week') { filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); } 
-            else if (mode === 'missed_month') { filtered = filtered.filter(c => getCustomerStats(c.id).month === 0); }
-            const list = document.getElementById('customerSidebarList'); list.innerHTML = '';
-            filtered.slice(0, 200).forEach(c => {
-                const stats = getCustomerStats(c.id);
-                const item = document.createElement('div');
-                item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer mb-2";
-                item.innerHTML = `<div><div class="font-bold text-gray-700 text-sm">${c.name}</div><div class="text-xs text-gray-400">${c.id}</div></div><div class="flex items-center space-x-2"><div class="text-[10px] text-gray-500 text-right mr-2"><div>Week: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div><div>Month: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div></div><button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-green-500 p-2"><i class="fa-solid fa-plus-circle text-xl"></i></button></div>`;
-                list.appendChild(item);
-            });
-        }
+    const mode = document.getElementById('sidebarFilterMode').value; 
+    const q = document.querySelector('#taskSidebar input').value.toLowerCase();
+    
+    // 1. 初步筛选：根据搜索框过滤名字或ID
+    let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+
+    // 2. 应用排序或特殊筛选逻辑
+    if (mode === 'balance_desc') {
+        // 按余额数值从大到小排序
+        filtered.sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
+    } else if (mode === 'missed_week') { 
+        filtered = filtered.filter(c => getCustomerStats(c.id).week === 0); 
+    } else if (mode === 'missed_month') { 
+        filtered = filtered.filter(c => getCustomerStats(c.id).month === 0); 
+    }
+    
+    const list = document.getElementById('customerSidebarList'); 
+    list.innerHTML = '';
+
+    // 3. 渲染列表
+    filtered.slice(0, 200).forEach(c => {
+        const stats = getCustomerStats(c.id);
+        const balValue = parseFloat(c.balance || 0);
+        
+        const item = document.createElement('div');
+        item.className = "flex justify-between items-center bg-white p-3 rounded border hover:shadow cursor-pointer mb-2";
+        item.innerHTML = `
+            <div class="flex-1">
+                <div class="font-bold text-gray-800 text-sm leading-tight">${c.name}</div>
+                <div class="text-[10px] text-gray-400 font-mono">${c.id}</div>
+                <div class="flex mt-1 space-x-4 text-[11px]">
+                    <span class="text-blue-700 font-bold">Credit: ${c.credit}</span>
+                    <span class="${balValue > 0 ? 'text-red-600' : 'text-gray-500'} font-bold">Balance: ${c.balance}</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <div class="text-[10px] text-gray-400 text-right mr-1">
+                    <div>W: <span class="font-bold ${stats.week==0?'text-red-500':'text-green-600'}">${stats.week}</span></div>
+                    <div>M: <span class="font-bold ${stats.month==0?'text-red-500':'text-green-600'}">${stats.month}</span></div>
+                </div>
+                <button onclick="addToTask('${c.id}')" class="text-gray-300 hover:text-primary p-2 transition">
+                    <i class="fa-solid fa-plus-circle text-2xl"></i>
+                </button>
+            </div>`;
+        list.appendChild(item);
+    });
+}
         function filterSidebarList(val) { applySidebarFilter(); }
         async function loadAssignedTasksForRep() { 
             const snap = await db.collection('admin_tasks').where('repCode', '==', currentUser.code).where('status', 'in', ['pending', 'responded']).get(); 
