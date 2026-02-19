@@ -457,19 +457,31 @@
         </div>
     </div>
 
-    <!-- Assigned Task Modal -->
-    <div id="assignedTaskModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white w-full max-w-2xl h-5/6 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
-            <div class="p-4 bg-primary text-white flex justify-between items-center">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-bell mr-2"></i>Assigned Tasks</h3>
-                <button onclick="toggleAssignedModal()" class="hover:text-red-200"><i class="fa-solid fa-times text-xl"></i></button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
-                <div id="acceptTaskList" class="space-y-3"></div>
-                <div id="noAssignedTasksMsg" class="hidden text-center text-gray-400 mt-10"><i class="fa-solid fa-clipboard-check text-4xl mb-2"></i><p>No pending tasks assigned.</p></div>
+<!-- Assigned Task Modal -->
+<div id="assignedTaskModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white w-full max-w-2xl h-5/6 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
+        <div class="p-4 bg-primary text-white flex justify-between items-center">
+            <h3 class="font-bold text-lg"><i class="fa-solid fa-bell mr-2"></i>Assigned Tasks</h3>
+            <button onclick="toggleAssignedModal()" class="hover:text-red-200"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        
+        <!-- 新增：排序筛选区域 -->
+        <div class="p-2 bg-gray-100 border-b">
+            <select id="assignedSortSelect" onchange="renderAcceptTasks()" class="w-full p-2 text-sm border rounded bg-white font-bold text-gray-600">
+                <option value="time_desc">Sort by Time (Newest First)</option>
+                <option value="balance_desc">Sort by Balance (High to Low)</option>
+            </select>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <div id="acceptTaskList" class="space-y-3"></div>
+            <div id="noAssignedTasksMsg" class="hidden text-center text-gray-400 mt-10">
+                <i class="fa-solid fa-clipboard-check text-4xl mb-2"></i>
+                <p>No pending tasks assigned.</p>
             </div>
         </div>
     </div>
+</div>
 
     <!-- Report Modal -->
     <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center backdrop-blur-sm">
@@ -951,47 +963,73 @@ async function syncLocalTasksCsvToFirebase() {
         }
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
-        function renderAcceptTasks() { 
-    // 获取当前任务中最新的表格日期
+function renderAcceptTasks() { 
+    // 1. 获取最新的表格日期并更新标题
     const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
-    
-    // 修改 Modal 的标题，加入更新日期
     const modalHeader = document.querySelector('#assignedTaskModal h3');
     if(modalHeader) {
         modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
     }
 
-    document.getElementById('acceptTaskList').innerHTML = adminTasks.map(t => `
-    <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative">
-        <div class="pr-12">
-            <div class="flex justify-between items-start mb-1">
-                <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
-                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">${t.orderDate}</span>
-            </div>
-            <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
-            <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
-            
-            <!-- 新增：显示余额 -->
-            <div class="mt-2 flex items-center text-sm">
-                <span class="text-gray-500 mr-2">Total Balance:</span>
-                <span class="font-bold text-red-600">₵ ${t.balance || '0.00'}</span>
-            </div>
+    // 2. 获取排序模式（如果还没渲染出来，默认按时间排）
+    const sortMode = document.getElementById('assignedSortSelect') ? document.getElementById('assignedSortSelect').value : 'time_desc';
 
-            <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
-        </div>
-        
-        <div class="absolute right-2 top-2 flex flex-col space-y-2">
-            <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
-                <i class="fa-solid fa-check"></i>
-            </button>
-            <button onclick="remarkOnTask('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
-                <i class="fa-solid fa-pen"></i>
-            </button>
-        </div>
-    </div>`).join(''); 
+    // 3. 过滤出余额 > 0 的任务
+    let displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
+
+    // 4. 执行排序逻辑
+    if (sortMode === 'time_desc') {
+        // 时间降序：使用 Firebase 的 timestamp 进行排序
+        displayTasks.sort((a, b) => {
+            const timeA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
+            const timeB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
+            return timeB - timeA;
+        });
+    } else if (sortMode === 'balance_desc') {
+        // 余额降序
+        displayTasks.sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
+    }
+
+    const container = document.getElementById('acceptTaskList');
+    const noMsg = document.getElementById('noAssignedTasksMsg');
+
+    if (displayTasks.length === 0) {
+        container.innerHTML = '';
+        noMsg.classList.remove('hidden');
+    } else {
+        noMsg.classList.add('hidden');
+        container.innerHTML = displayTasks.map(t => `
+        <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative animate-fade-in">
+            <div class="pr-12">
+                <div class="flex justify-between items-start mb-1">
+                    <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
+                    <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded">Order: ${t.orderDate}</span>
+                </div>
+                <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
+                <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
+                
+                <div class="mt-2 flex items-center text-sm">
+                    <span class="text-gray-500 mr-2">Total Balance:</span>
+                    <span class="font-bold text-red-600">₵ ${t.balance || '0.00'}</span>
+                </div>
+
+                <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
+            </div>
+            
+            <div class="absolute right-2 top-2 flex flex-col space-y-2">
+                <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+                <button onclick="addTaskFromAssigned('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </div>`).join('');
+    }
     
-    document.getElementById('assignedCountBadge').innerText = adminTasks.length; 
-    document.getElementById('assignedCountBadge').classList.toggle('hidden', adminTasks.length === 0); 
+    // 更新外部提醒图标上的角标数量
+    document.getElementById('assignedCountBadge').innerText = displayTasks.length; 
+    document.getElementById('assignedCountBadge').classList.toggle('hidden', displayTasks.length === 0); 
 }
 
         async function confirmTaskReceipt(docId) {
