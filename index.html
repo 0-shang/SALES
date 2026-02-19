@@ -589,18 +589,16 @@
             Papa.parse("customers.csv", { 
                 download: true, header: true, skipEmptyLines: true,
                 error: function(err, file, inputElem, reason) { alert("CSV Error: " + err.message); },
-              complete: function(results) { 
-        allSalesData = results.data.map(item => ({ 
-        id: (item.Code||item.code||"").trim(), 
-        name: (item.Name||item.name||"Unknown").trim(), 
-        csvRepName: (item.Repname||item.repname||"Sales").trim(), // 注意表头大小写匹配
-        repCode: (item.Limit||item.limit||"").trim().toUpperCase(), 
-        phone: (item.Phone||item.phone||"").trim(), 
-        credit: (item.Credit||item.credit||"0").trim(),
-        balance: (item.Balance||item.balance||"0").trim() // 新增：读取余额列
-    })); 
-    // ... 后面的逻辑保持不变
-}
+                complete: function(results) { 
+                    allSalesData = results.data.map(item => ({ 
+                        id: (item.Code||item.code||"").trim(), 
+                        name: (item.Name||item.name||"Unknown").trim(), 
+                        csvRepName: (item.RepName||item.repname||"Sales").trim(), 
+                        repCode: (item.Limit||item.limit||"").trim().toUpperCase(), 
+                        phone: (item.Phone||item.phone||"").trim(), 
+                        credit: (item.Credit||item.credit||"0").trim(),
+                        balance: (item.Balance||item.balance||"0").trim()
+                    })); 
 
                     if(currentUser && !currentUser.isAdmin) {
                         if(currentUser.code === '10595') {
