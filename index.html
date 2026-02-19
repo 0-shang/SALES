@@ -589,9 +589,8 @@
             Papa.parse("customers.csv", { 
                 download: true, header: true, skipEmptyLines: true,
                 error: function(err, file, inputElem, reason) { alert("CSV Error: " + err.message); },
-                // 在 loadCustomersCSV 函数内修改
-complete: function(results) { 
-    allSalesData = results.data.map(item => ({ 
+              complete: function(results) { 
+        allSalesData = results.data.map(item => ({ 
         id: (item.Code||item.code||"").trim(), 
         name: (item.Name||item.name||"Unknown").trim(), 
         csvRepName: (item.Repname||item.repname||"Sales").trim(), // 注意表头大小写匹配
