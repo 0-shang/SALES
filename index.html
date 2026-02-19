@@ -964,14 +964,14 @@ async function syncLocalTasksCsvToFirebase() {
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
 function renderAcceptTasks() { 
-    // 1. 获取最新的表格日期并更新标题
+    // 1. 更新标题日期显示
     const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
     const modalHeader = document.querySelector('#assignedTaskModal h3');
     if(modalHeader) {
         modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
     }
 
-    // 2. 获取排序模式（如果还没渲染出来，默认按时间排）
+    // 2. 获取排序模式
     const sortMode = document.getElementById('assignedSortSelect') ? document.getElementById('assignedSortSelect').value : 'time_desc';
 
     // 3. 过滤出余额 > 0 的任务
@@ -979,11 +979,19 @@ function renderAcceptTasks() {
 
     // 4. 执行排序逻辑
     if (sortMode === 'time_desc') {
-        // 时间降序：使用 Firebase 的 timestamp 进行排序
+        // 【核心修改】：按照表格里的 DATE (orderDate) 排序
         displayTasks.sort((a, b) => {
-            const timeA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
-            const timeB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
-            return timeB - timeA;
+            // 将字符串日期转换为时间戳进行对比
+            const dateA = new Date(a.orderDate || 0).getTime();
+            const dateB = new Date(b.orderDate || 0).getTime();
+            
+            // 如果日期完全一样，则按后台上传时间次优排序
+            if (dateB === dateA) {
+                const tsA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
+                const tsB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
+                return tsB - tsA;
+            }
+            return dateB - dateA; // 降序：最新日期在前
         });
     } else if (sortMode === 'balance_desc') {
         // 余额降序
@@ -999,11 +1007,11 @@ function renderAcceptTasks() {
     } else {
         noMsg.classList.add('hidden');
         container.innerHTML = displayTasks.map(t => `
-        <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative animate-fade-in">
+        <div id="accept-${t.docId}" class="bg-white p-4 rounded shadow mb-3 border-l-4 border-primary relative">
             <div class="pr-12">
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-lg text-primary">${t.amount || '0'}</span>
-                    <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded">Order: ${t.orderDate}</span>
+                    <span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">DATE: ${t.orderDate}</span>
                 </div>
                 <div class="font-bold text-gray-800 text-sm">${t.customerName}</div>
                 <div class="text-xs text-gray-400 font-mono mb-1">${t.customerId}</div>
@@ -1027,7 +1035,6 @@ function renderAcceptTasks() {
         </div>`).join('');
     }
     
-    // 更新外部提醒图标上的角标数量
     document.getElementById('assignedCountBadge').innerText = displayTasks.length; 
     document.getElementById('assignedCountBadge').classList.toggle('hidden', displayTasks.length === 0); 
 }
