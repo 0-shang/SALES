@@ -967,40 +967,13 @@ oldTasks.forEach(old => {
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
 function renderAcceptTasks() { 
-    // 1. 更新标题日期显示
     const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
     const modalHeader = document.querySelector('#assignedTaskModal h3');
     if(modalHeader) {
         modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
     }
 
-    // 2. 获取排序模式
-    const sortMode = document.getElementById('assignedSortSelect') ? document.getElementById('assignedSortSelect').value : 'time_desc';
-
-    // 3. 过滤出余额 > 0 的任务
-    let displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
-
-    // 4. 执行排序逻辑
-    if (sortMode === 'time_desc') {
-        // 【核心修改】：按照表格里的 DATE (orderDate) 排序
-        displayTasks.sort((a, b) => {
-            // 将字符串日期转换为时间戳进行对比
-            const dateA = new Date(a.orderDate || 0).getTime();
-            const dateB = new Date(b.orderDate || 0).getTime();
-            
-            // 如果日期完全一样，则按后台上传时间次优排序
-            if (dateB === dateA) {
-                const tsA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
-                const tsB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
-                return tsB - tsA;
-            }
-            return dateB - dateA; // 降序：最新日期在前
-        });
-    } else if (sortMode === 'balance_desc') {
-        // 余额降序
-        displayTasks.sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
-    }
-
+    const displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
     const container = document.getElementById('acceptTaskList');
     const noMsg = document.getElementById('noAssignedTasksMsg');
 
@@ -1025,14 +998,25 @@ function renderAcceptTasks() {
                 </div>
 
                 <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
+                
+                ${t.repResponse ? `<div class="mt-2 p-2 bg-blue-50 text-xs text-blue-700 rounded border border-blue-100"><b>My Remark:</b> ${t.repResponse}</div>` : ''}
             </div>
             
+            <!-- 右侧按钮区域：现在有 3 个按钮 -->
             <div class="absolute right-2 top-2 flex flex-col space-y-2">
-                <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
+                <!-- 1. 确认收钱按钮 (绿色) -->
+                <button onclick="confirmTaskReceipt('${t.docId}')" title="Confirm Receipt" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center transition">
                     <i class="fa-solid fa-check"></i>
                 </button>
-                <button onclick="addTaskFromAssigned('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
+                
+                <!-- 2. 添加到今日计划按钮 (蓝色) -->
+                <button onclick="addTaskFromAssigned('${t.docId}')" title="Add to Plan" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center transition">
                     <i class="fa-solid fa-plus"></i>
+                </button>
+                
+                <!-- 3. 填写备注按钮 (黄色) -->
+                <button onclick="remarkOnTask('${t.docId}')" title="Add Remark" class="bg-yellow-500 text-white w-10 h-10 rounded-full shadow hover:bg-yellow-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-pen text-xs"></i>
                 </button>
             </div>
         </div>`).join('');
