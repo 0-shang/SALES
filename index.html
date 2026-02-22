@@ -676,28 +676,26 @@
                 if(allSalesData.length > 0) customers = allSalesData.filter(c => c.repCode == code); 
             }
             
-            // 1. 确定该用户应该使用的正确密码
-let correctPassword = "";
+            if (vipUsers.includes(code)) {
+                if (pass !== '6666' && pass !== '****') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                currentUser = { code: code, name: finalName, isAdmin: false, isVip: true }; 
+            } else {
+                if (pass !== '0000' && pass !== '****') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                if (!repDirectory[code] && customers.length === 0) { if(!silent) { status.innerText = "Code not found"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                currentUser = { code: code, name: finalName, isAdmin: false, isVip: false };
+            }
 
-if (code === "10543") {
-    correctPassword = "BITCH"; // 特殊设置：10543 必须用这个
-} else if (vipUsers.includes(code)) {
-    correctPassword = "6666";  // VIP 用户用这个
-} else {
-    correctPassword = "0000";  // 其他普通销售用这个
-}
-
-// 2. 进行密码校验
-// pass 是用户输入的，correctPassword 是上面刚才确定的
-// '****' 是为了兼容“记住我”自动登录功能，不要动它
-if (pass !== correctPassword && pass !== '****') {
-    if (!silent) {
-        status.innerText = "Wrong Password";
-        status.classList.remove('hidden');
-        resetLoginBtn();
-    }
-    return; // 密码不对，直接结束，不让登录
-}
+            myCustomers = customers;
+            localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
+            await refreshData(); 
+            document.getElementById('loginSection').classList.add('hidden'); 
+            document.getElementById('appSection').classList.remove('hidden'); 
+            document.body.classList.add('loaded'); 
+            document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; 
+            listenForPdfStatus(); 
+            listenForHistory(); 
+            if(!silent) resetLoginBtn();
+        }
 
         function resetLoginBtn() { const btn = document.getElementById('btnLogin'); btn.innerHTML = 'LOGIN'; btn.classList.remove('btn-loading'); }
         function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; document.body.classList.remove('loaded'); }
