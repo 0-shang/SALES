@@ -68,10 +68,6 @@
     </script>
     
     <style>
-        #splashScreen.fade-out {
-    opacity: 0;
-    pointer-events: none;
-}
         body { background-color: #1e40af; overflow: hidden; } 
         body.loaded { background-color: #f3f4f6; } 
 
@@ -130,15 +126,7 @@
     </style>
 </head>
 <body class="font-sans h-screen flex flex-col text-gray-800">
-<!-- 1. 启动层 (Splash Screen) -->
-<div id="splashScreen" class="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center transition-opacity duration-500">
-    <img src="logo.png" class="w-48 h-auto mb-6"> <!-- 确保你有张图片叫 logo.png -->
-    <div class="flex space-x-2">
-        <div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
-        <div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-        <div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-    </div>
-</div>
+
     <!-- A. Login Section -->
     <div id="loginSection" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
         <div class="login-card">
@@ -473,7 +461,7 @@
 <div id="assignedTaskModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden flex items-center justify-center backdrop-blur-sm">
     <div class="bg-white w-full max-w-2xl h-5/6 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
         <div class="p-4 bg-primary text-white flex justify-between items-center">
-            <h3 class="font-bold text-lg"><i class="fa-solid fa-bell mr-2"></i>Accounts Receivable</h3>
+            <h3 class="font-bold text-lg"><i class="fa-solid fa-bell mr-2"></i>Assigned Tasks</h3>
             <button onclick="toggleAssignedModal()" class="hover:text-red-200"><i class="fa-solid fa-times text-xl"></i></button>
         </div>
         
@@ -591,37 +579,23 @@
         function initPullToRefresh(containerId, indicatorId) { const container = document.getElementById(containerId); const indicator = document.getElementById(indicatorId); let startY = 0; let isPulling = false; container.addEventListener('touchstart', (e) => { if (container.scrollTop === 0) { startY = e.touches[0].clientY; isPulling = true; } }); container.addEventListener('touchmove', (e) => { if (!isPulling) return; const y = e.touches[0].clientY; const diff = y - startY; if (diff > 0 && diff < 200 && container.scrollTop === 0) { indicator.style.height = `${diff / 3}px`; } }); container.addEventListener('touchend', (e) => { if (!isPulling) return; isPulling = false; const endY = e.changedTouches[0].clientY; if (endY - startY > 80 && container.scrollTop === 0) { indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...'; indicator.style.height = '50px'; refreshData().then(() => { setTimeout(() => { indicator.style.height = '0px'; indicator.innerHTML = '<i class="fa-solid fa-arrow-down mr-2"></i> Pull to refresh'; }, 500); }); } else { indicator.style.height = '0px'; } }); }
         
         async function refreshData() { 
-    if (!currentUser) {
-        hideSplashScreen(); // 没登录也得关掉，不然挡着登录框
-        return;
-    } 
-    try { 
-        if(currentUser.isAdmin) { 
-            await loadAllDataForAdmin(); 
-            renderAdminTasks(); 
-        } else { 
-            await loadTasksFromCloud(); 
-            await loadHistoryFromCloud(); 
-            await loadAssignedTasksForRep(); 
-            applySidebarFilter(); 
-            renderTasks(); 
-            updateAssignedBadge(); 
-        } 
-        hideSplashScreen(); // 数据加载完，关掉启动页
-    } catch (e) { 
-        console.error(e);
-        hideSplashScreen(); // 出错了也得关掉
-    } 
-}
-
-// 在 script 标签里随便找个地方放这个小函数
-function hideSplashScreen() {
-    const splash = document.getElementById('splashScreen');
-    if(splash) {
-        splash.classList.add('fade-out');
-        setTimeout(() => splash.remove(), 500); 
-    }
-}
+            if (!currentUser) return; 
+            try { 
+                if(currentUser.isAdmin) { 
+                    await loadAllDataForAdmin(); 
+                    renderAdminTasks(); 
+                    renderAdminReports();
+                    renderAdminRequests();
+                } else { 
+                    await loadTasksFromCloud(); 
+                    await loadHistoryFromCloud(); 
+                    await loadAssignedTasksForRep(); 
+                    applySidebarFilter(); 
+                    renderTasks(); 
+                    updateAssignedBadge(); 
+                } 
+            } catch (e) { console.error(e); } 
+        }
 
         function loadCustomersCSV() { 
             Papa.parse("customers.csv", { 
@@ -702,28 +676,26 @@ function hideSplashScreen() {
                 if(allSalesData.length > 0) customers = allSalesData.filter(c => c.repCode == code); 
             }
             
-           // 1. 确定该用户应该使用的正确密码
-let correctPassword = "";
+            if (vipUsers.includes(code)) {
+                if (pass !== '6666' && pass !== '****') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                currentUser = { code: code, name: finalName, isAdmin: false, isVip: true }; 
+            } else {
+                if (pass !== '0000' && pass !== '****') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                if (!repDirectory[code] && customers.length === 0) { if(!silent) { status.innerText = "Code not found"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                currentUser = { code: code, name: finalName, isAdmin: false, isVip: false };
+            }
 
-if (code === "10543") {
-    correctPassword = "BITCH"; // 特殊设置：10543 必须用这个
-} else if (vipUsers.includes(code)) {
-    correctPassword = "6666";  // VIP 用户用这个
-} else {
-    correctPassword = "0000";  // 其他普通销售用这个
-}
-
-// 2. 进行密码校验
-// pass 是用户输入的，correctPassword 是上面刚才确定的
-// '****' 是为了兼容“记住我”自动登录功能，不要动它
-if (pass !== correctPassword && pass !== '****') {
-    if (!silent) {
-        status.innerText = "Wrong Password";
-        status.classList.remove('hidden');
-        resetLoginBtn();
-    }
-    return; // 密码不对，直接结束，不让登录
-}
+            myCustomers = customers;
+            localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
+            await refreshData(); 
+            document.getElementById('loginSection').classList.add('hidden'); 
+            document.getElementById('appSection').classList.remove('hidden'); 
+            document.body.classList.add('loaded'); 
+            document.getElementById('welcomeUserText').innerText = `Welcome ${currentUser.name}`; 
+            listenForPdfStatus(); 
+            listenForHistory(); 
+            if(!silent) resetLoginBtn();
+        }
 
         function resetLoginBtn() { const btn = document.getElementById('btnLogin'); btn.innerHTML = 'LOGIN'; btn.classList.remove('btn-loading'); }
         function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; document.body.classList.remove('loaded'); }
@@ -935,15 +907,6 @@ async function syncLocalTasksCsvToFirebase() {
     const mode = document.getElementById('sidebarFilterMode').value; 
     const q = document.querySelector('#taskSidebar input').value.toLowerCase();
     
-    // 【修改这里】：从 adminTasks 里抓取管理员填写的那个 tableDate
-    const taskDate = (adminTasks.length > 0 && adminTasks[0].tableDate) ? adminTasks[0].tableDate : "No Data";
-    
-    const sidebarTitle = document.querySelector('#taskSidebar h3');
-    if (sidebarTitle) {
-        // 让侧边栏标题显示跟小铃铛一样的日期
-        sidebarTitle.innerHTML = `Select Customers <span class="text-[10px] font-normal opacity-80">(${taskDate})</span>`;
-    }
-    
     // 1. 初步筛选：根据搜索框过滤名字或ID
     let filtered = myCustomers.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
 
@@ -1000,7 +963,7 @@ function renderAcceptTasks() {
     const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
     const modalHeader = document.querySelector('#assignedTaskModal h3');
     if(modalHeader) {
-        modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Accounts Receivable <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
+        modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
     }
 
     // 2. 获取当前的排序模式 (由下拉框决定)
