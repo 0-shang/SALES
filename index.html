@@ -515,6 +515,7 @@
         let cartCustomer = null; 
 
         const repDirectory = {
+            "10543": "BENY",
             "10882": "PRINCE",
             "10989": "BOATEMAA ABIGAIL",
             "11006": "AMOAH HILDA",
@@ -763,18 +764,23 @@
 
        // 修改 index.html 中的这个函数
 async function syncLocalTasksCsvToFirebase() {
-    // 1. 设置当前要读取的文件名（你可以根据需要手动修改这个变量，或做一个输入框）
-    const csvFileName = "tasks2026-02-21.csv"; 
-    
-    // 从文件名提取日期 (匹配 YYYY-MM-DD)
-    const dateMatch = csvFileName.match(/\d{4}-\d{2}-\d{2}/);
-    const tableDate = dateMatch ? dateMatch[0] : new Date().toLocaleDateString();
+    // 1. 固定读取名为 tasks.csv 的活跃文件
+    const csvFileName = "tasks.csv"; 
+
+    // 2. 询问数据的日期（默认显示今天，方便你直接点确定）
+    const todayStr = new Date().toISOString().slice(0, 10); // 格式：2026-02-21
+    const tableDate = prompt("正在同步 tasks.csv，请输入这批数据的日期：", todayStr);
+
+    if (!tableDate) {
+        console.log("同步已取消");
+        return;
+    }
 
     Papa.parse(csvFileName, {
         download: true,
         header: true,
         skipEmptyLines: true,
-        encoding: "UTF-8", 
+        encoding: "UTF-8",
         complete: async function(results) {
             const rows = results.data;
             if (rows.length === 0) return;
@@ -782,7 +788,7 @@ async function syncLocalTasksCsvToFirebase() {
             const batch = db.batch();
             let count = 0;
 
-            // 构建销售员映射（复用你原有的逻辑）
+            // 建立 Rep 映射逻辑（保持不变...）
             const repMap = {};
             allSalesData.forEach(c => { if (c.repCode && c.csvRepName) repMap[c.csvRepName.toUpperCase()] = c.repCode; });
             for(let [k,v] of Object.entries(repDirectory)) { repMap[v.toUpperCase()] = k; }
@@ -794,34 +800,22 @@ async function syncLocalTasksCsvToFirebase() {
                 const date = (row['DATE'] || "").trim();
                 const repName = (row['REPNAME'] || "").trim();
                 const mark = (row['MARK'] || "").trim();
-                const balance = (row['BALANCE'] || "0").trim(); // 新增：读取余额列
+                const balance = (row['BALANCE'] || "0").trim();
 
                 if (repName && code) {
-                    let targetRepCode = repMap[repName.toUpperCase()];
+                    let targetRepCode = repMap[repName] || repMap[repName.toUpperCase()];
                     if (targetRepCode) {
-                        // 【修改后的查重逻辑】
-// 1. 检查是否存在完全一模一样的任务（ID + 金额 + 日期 + 业务员代码）
-const exactMatch = adminTasks.find(t => 
-    t.customerId === code && 
-    t.amount === amt && 
-    t.orderDate === date &&
-    t.repCode === targetRepCode // 新增：必须业务员也一样才算完全一样
-);
+                        // 查重逻辑：加入 targetRepCode 判定
+                        const exactMatch = adminTasks.find(t => 
+                            t.customerId === code && t.amount === amt && t.orderDate === date && t.repCode === targetRepCode
+                        );
+                        if (exactMatch) continue;
 
-if (exactMatch) {
-    // 只有四项全对，才跳过
-    continue;
-}
+                        // 覆盖逻辑：删除旧的 Pending
+                        const oldTasks = adminTasks.filter(t => t.customerId === code && t.status === 'pending');
+                        oldTasks.forEach(old => batch.delete(db.collection('admin_tasks').doc(old.docId)));
 
-// 2. 如果业务员变了，或者日期变了，我们需要把该客户所有 pending 的旧任务清理掉
-// 这样新业务员才能接手，旧业务员的任务会消失
-const oldTasks = adminTasks.filter(t => t.customerId === code && t.status === 'pending');
-
-oldTasks.forEach(old => {
-    batch.delete(db.collection('admin_tasks').doc(old.docId));
-});
-
-                        // 3. 写入新任务
+                        // 3. 写入新任务，保存你刚才输入的 tableDate
                         const ref = db.collection('admin_tasks').doc();
                         batch.set(ref, {
                             repCode: targetRepCode,
@@ -831,8 +825,8 @@ oldTasks.forEach(old => {
                             amount: amt,
                             orderDate: date,
                             taskDetail: mark,
-                            balance: balance,       // 新增：保存余额
-                            tableDate: tableDate,   // 新增：记录表格来源日期
+                            balance: balance,
+                            tableDate: tableDate, // <--- 关键：这里存入你输入的日期
                             status: 'pending',
                             assignedDate: new Date().toLocaleDateString(),
                             timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -844,13 +838,12 @@ oldTasks.forEach(old => {
 
             if (count > 0) {
                 await batch.commit();
-                alert(`Successfully synced ${count} tasks from ${csvFileName}`);
+                alert(`同步完成！共导入 ${count} 条任务，标注日期为: ${tableDate}`);
                 refreshData();
             }
         }
     });
 }
-
         function renderAdminReports() { 
             const dateVal = document.getElementById('adminReportDateFilter').value; 
             const repVal = document.getElementById('adminReportRepFilter').value; 
@@ -966,16 +959,42 @@ oldTasks.forEach(old => {
         function toggleAssignedModal() { document.getElementById('assignedTaskModal').classList.toggle('hidden'); renderAcceptTasks(); }
         
 function renderAcceptTasks() { 
+    // 1. 获取最新的表格日期并更新标题显示
     const latestTableDate = adminTasks.length > 0 ? (adminTasks[0].tableDate || "-") : "-";
     const modalHeader = document.querySelector('#assignedTaskModal h3');
     if(modalHeader) {
         modalHeader.innerHTML = `<i class="fa-solid fa-bell mr-2"></i>Assigned Tasks <span class="text-xs font-normal opacity-80">(Data: ${latestTableDate})</span>`;
     }
 
-    const displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
+    // 2. 获取当前的排序模式 (由下拉框决定)
+    const sortMode = document.getElementById('assignedSortSelect') ? document.getElementById('assignedSortSelect').value : 'time_desc';
+
+    // 3. 过滤逻辑：只显示余额 > 0 的任务
+    let displayTasks = adminTasks.filter(t => parseFloat(t.balance || 0) > 0);
+
+    // 4. 【核心排序代码】：处理时间或余额降序
+    if (sortMode === 'time_desc') {
+        // 按照 tasks.csv 里的 DATE 降序排列 (最新的日期在上)
+        displayTasks.sort((a, b) => {
+            const dateA = new Date(a.orderDate || 0).getTime();
+            const dateB = new Date(b.orderDate || 0).getTime();
+            // 如果日期相同，按上传顺序排
+            if (dateB === dateA) {
+                const tsA = a.timestamp ? (a.timestamp.seconds || 0) : 0;
+                const tsB = b.timestamp ? (b.timestamp.seconds || 0) : 0;
+                return tsB - tsA;
+            }
+            return dateB - dateA;
+        });
+    } else if (sortMode === 'balance_desc') {
+        // 按照 余额 降序排列 (欠款最多的在上)
+        displayTasks.sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
+    }
+
     const container = document.getElementById('acceptTaskList');
     const noMsg = document.getElementById('noAssignedTasksMsg');
 
+    // 5. 渲染列表
     if (displayTasks.length === 0) {
         container.innerHTML = '';
         noMsg.classList.remove('hidden');
@@ -998,29 +1017,29 @@ function renderAcceptTasks() {
 
                 <div class="text-sm text-gray-600 italic bg-yellow-50 p-2 rounded mt-2 border border-yellow-100">${t.taskDetail}</div>
                 
-                ${t.repResponse ? `<div class="mt-2 p-2 bg-blue-50 text-xs text-blue-700 rounded border border-blue-100"><b>My Remark:</b> ${t.repResponse}</div>` : ''}
+                <!-- 显示已有的备注 -->
+                ${t.repResponse ? `<div class="mt-2 p-2 bg-blue-50 text-xs text-blue-700 rounded border border-blue-100"><b>Remark:</b> ${t.repResponse}</div>` : ''}
             </div>
             
-            <!-- 右侧按钮区域：现在有 3 个按钮 -->
+            <!-- 按钮组 -->
             <div class="absolute right-2 top-2 flex flex-col space-y-2">
-                <!-- 1. 确认收钱按钮 (绿色) -->
-                <button onclick="confirmTaskReceipt('${t.docId}')" title="Confirm Receipt" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center transition">
+                <!-- 确认收款 -->
+                <button onclick="confirmTaskReceipt('${t.docId}')" class="bg-green-500 text-white w-10 h-10 rounded-full shadow hover:bg-green-600 flex items-center justify-center">
                     <i class="fa-solid fa-check"></i>
                 </button>
-                
-                <!-- 2. 添加到今日计划按钮 (蓝色) -->
-                <button onclick="addTaskFromAssigned('${t.docId}')" title="Add to Plan" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center transition">
+                <!-- 加入今日拜访 -->
+                <button onclick="addTaskFromAssigned('${t.docId}')" class="bg-blue-500 text-white w-10 h-10 rounded-full shadow hover:bg-blue-600 flex items-center justify-center">
                     <i class="fa-solid fa-plus"></i>
                 </button>
-                
-                <!-- 3. 填写备注按钮 (黄色) -->
-                <button onclick="remarkOnTask('${t.docId}')" title="Add Remark" class="bg-yellow-500 text-white w-10 h-10 rounded-full shadow hover:bg-yellow-600 flex items-center justify-center transition">
+                <!-- 填写/修改备注 -->
+                <button onclick="remarkOnTask('${t.docId}')" class="bg-yellow-500 text-white w-10 h-10 rounded-full shadow hover:bg-yellow-600 flex items-center justify-center">
                     <i class="fa-solid fa-pen text-xs"></i>
                 </button>
             </div>
         </div>`).join('');
     }
     
+    // 更新外部提醒数字
     document.getElementById('assignedCountBadge').innerText = displayTasks.length; 
     document.getElementById('assignedCountBadge').classList.toggle('hidden', displayTasks.length === 0); 
 }
