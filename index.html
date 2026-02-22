@@ -676,44 +676,15 @@
                 if(allSalesData.length > 0) customers = allSalesData.filter(c => c.repCode == code); 
             }
             
-           // --- 1. 确定当前账号对应的正确密码 ---
-            let requiredPass = '0000'; // 默认为普通密码
-
-            if (code === '10543') {
-                requiredPass = 'BITCH'; // 针对 10543 的特殊设置
-            } else if (vipUsers.includes(code)) {
-                requiredPass = '6666'; // VIP 用户的密码
+            if (vipUsers.includes(code)) {
+                if (pass !== '6666' && pass !== '****') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                currentUser = { code: code, name: finalName, isAdmin: false, isVip: true }; 
+            } else {
+                if (pass !== '0000' && pass !== '****') { if(!silent) { status.innerText = "Wrong Password"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                if (!repDirectory[code] && customers.length === 0) { if(!silent) { status.innerText = "Code not found"; status.classList.remove('hidden'); resetLoginBtn(); } return; }
+                currentUser = { code: code, name: finalName, isAdmin: false, isVip: false };
             }
 
-            // --- 2. 验证输入的密码 (包括对记住密码 **** 的兼容) ---
-            if (pass !== requiredPass && pass !== '****') { 
-                if(!silent) { 
-                    status.innerText = "Wrong Password"; 
-                    status.classList.remove('hidden'); 
-                    resetLoginBtn(); 
-                } 
-                return; 
-            }
-
-            // --- 3. 检查账号是否存在于目录中 ---
-            if (!repDirectory[code] && customers.length === 0) { 
-                if(!silent) { 
-                    status.innerText = "Code not found"; 
-                    status.classList.remove('hidden'); 
-                    resetLoginBtn(); 
-                } 
-                return; 
-            }
-
-            // --- 4. 登录成功，创建用户对象 ---
-            currentUser = { 
-                code: code, 
-                name: finalName, 
-                isAdmin: false, 
-                isVip: vipUsers.includes(code) 
-            };
-
-            // --- 以下是原有的后续逻辑，保持不变 ---
             myCustomers = customers;
             localStorage.setItem('salesMasterUser', JSON.stringify(currentUser)); 
             await refreshData(); 
@@ -724,6 +695,7 @@
             listenForPdfStatus(); 
             listenForHistory(); 
             if(!silent) resetLoginBtn();
+        }
 
         function resetLoginBtn() { const btn = document.getElementById('btnLogin'); btn.innerHTML = 'LOGIN'; btn.classList.remove('btn-loading'); }
         function logout() { localStorage.removeItem('salesMasterUser'); currentUser = null; document.getElementById('appSection').classList.add('hidden'); document.getElementById('adminSection').classList.add('hidden'); document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('loginRepCode').value = ''; document.getElementById('loginPassword').value = ''; document.body.classList.remove('loaded'); }
