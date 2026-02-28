@@ -767,9 +767,9 @@ async function syncLocalTasksCsvToFirebase() {
     // 1. 固定读取名为 tasks.csv 的活跃文件
     const csvFileName = "tasks.csv"; 
 
-    // 2. 询问数据的日期（默认显示今天，方便你直接点确定）
-    const todayStr = new Date().toISOString().slice(0, 10); // 格式：2026-02-21
-    const tableDate = prompt("正在同步 tasks.csv，请输入这批数据的日期：", todayStr);
+    // 2. 询问数据的日期（默认显示今天）
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const tableDate = prompt("正在同步 tasks.csv，请输入这批数据的标注日期：", todayStr);
 
     if (!tableDate) {
         console.log("同步已取消");
@@ -788,7 +788,7 @@ async function syncLocalTasksCsvToFirebase() {
             const batch = db.batch();
             let count = 0;
 
-            // 建立 Rep 映射逻辑（保持不变...）
+            // 建立 Rep 映射
             const repMap = {};
             allSalesData.forEach(c => { if (c.repCode && c.csvRepName) repMap[c.csvRepName.toUpperCase()] = c.repCode; });
             for(let [k,v] of Object.entries(repDirectory)) { repMap[v.toUpperCase()] = k; }
@@ -805,17 +805,29 @@ async function syncLocalTasksCsvToFirebase() {
                 if (repName && code) {
                     let targetRepCode = repMap[repName] || repMap[repName.toUpperCase()];
                     if (targetRepCode) {
-                        // 查重逻辑：加入 targetRepCode 判定
+                        
+                        // 【核心去重逻辑改进】
+                        
+                        // 1. 检查是否存在“完全一模一样”的任务（ID + 金额 + 日期 + 业务员）
+                        // 如果一模一样，我们不做任何操作（不删除也不增加），直接跳过
                         const exactMatch = adminTasks.find(t => 
-                            t.customerId === code && t.amount === amt && t.orderDate === date && t.repCode === targetRepCode
+                            t.customerId === code && 
+                            t.amount === amt && 
+                            t.orderDate === date && 
+                            t.repCode === targetRepCode
                         );
+
                         if (exactMatch) continue;
 
-                        // 覆盖逻辑：删除旧的 Pending
+                        // 2. 如果不完全一样（比如日期变了，或者换了业务员）
+                        // 只要这个客户在数据库里有任何“Pending（待处理）”的任务，全部删掉！
+                        // 这样能确保每个客户永远只有一个最新的任务在销售员手机上。
                         const oldTasks = adminTasks.filter(t => t.customerId === code && t.status === 'pending');
-                        oldTasks.forEach(old => batch.delete(db.collection('admin_tasks').doc(old.docId)));
+                        oldTasks.forEach(old => {
+                            batch.delete(db.collection('admin_tasks').doc(old.docId));
+                        });
 
-                        // 3. 写入新任务，保存你刚才输入的 tableDate
+                        // 3. 写入新的任务数据
                         const ref = db.collection('admin_tasks').doc();
                         batch.set(ref, {
                             repCode: targetRepCode,
@@ -826,7 +838,7 @@ async function syncLocalTasksCsvToFirebase() {
                             orderDate: date,
                             taskDetail: mark,
                             balance: balance,
-                            tableDate: tableDate, // <--- 关键：这里存入你输入的日期
+                            tableDate: tableDate,
                             status: 'pending',
                             assignedDate: new Date().toLocaleDateString(),
                             timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -838,13 +850,14 @@ async function syncLocalTasksCsvToFirebase() {
 
             if (count > 0) {
                 await batch.commit();
-                alert(`同步完成！共导入 ${count} 条任务，标注日期为: ${tableDate}`);
+                alert(`同步完成！已清理旧数据并导入 ${count} 条新任务。`);
                 refreshData();
+            } else {
+                alert("没有发现需要更新的数据。");
             }
         }
     });
-}
-        function renderAdminReports() { 
+}        function renderAdminReports() { 
             const dateVal = document.getElementById('adminReportDateFilter').value; 
             const repVal = document.getElementById('adminReportRepFilter').value; 
             const textVal = document.getElementById('adminReportTextFilter').value.toLowerCase(); 
